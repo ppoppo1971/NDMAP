@@ -16,7 +16,9 @@ var photos = [];
 var texts = [];
 var photoMarkers = [];
 var textMarkers = [];
+var textOverlay = null;
 var pendingAddPosition = null; // { x, y } DXF 좌표 (롱프레스 시)
+var lastLongPressEndTime = 0;
 var contextMenuEl = null;
 var longPressTimer = null;
 var longPressDuration = 400;
@@ -497,9 +499,10 @@ function clearPhotoMarkers() {
 }
 
 function clearTextMarkers() {
-  textMarkers.forEach(function (m) {
-    if (m && m.setMap) m.setMap(null);
-  });
+  if (textOverlay) {
+    textOverlay.setMap(null);
+    textOverlay = null;
+  }
   textMarkers = [];
 }
 
@@ -536,6 +539,7 @@ function drawPhotoMarkers() {
     });
     m.photoId = p.id;
     m.addListener('click', function () {
+      if (Date.now() - lastLongPressEndTime < 600) return;
       showPhotoModal(p.id);
     });
     photoMarkers.push(m);
@@ -544,22 +548,58 @@ function drawPhotoMarkers() {
 
 function drawTextMarkers() {
   clearTextMarkers();
-  if (!map || !window.DxfToGeoJSON) return;
-  texts.forEach(function (t) {
-    var pos = dxfToLatLng(t.x, t.y);
-    if (!pos) return;
-    var m = new google.maps.Marker({
-      map: map,
-      position: pos,
-      label: { text: (t.text || '').slice(0, 20) || 'T', color: '#333', fontSize: '12px' },
-      title: t.text || ''
+  if (!map || !window.DxfToGeoJSON || !texts.length) return;
+  function TextOnlyOverlay(textsArr) {
+    this.textsArr = textsArr;
+    this.div = null;
+    this.setMap(map);
+  }
+  TextOnlyOverlay.prototype = new google.maps.OverlayView();
+  TextOnlyOverlay.prototype.onAdd = function () {
+    this.div = document.createElement('div');
+    this.div.style.position = 'absolute';
+    this.div.style.pointerEvents = 'auto';
+    this.div.style.left = '0';
+    this.div.style.top = '0';
+    var pane = this.getPanes && this.getPanes();
+    if (pane) (pane.floatPane || pane.overlayLayer).appendChild(this.div);
+  };
+  TextOnlyOverlay.prototype.draw = function () {
+    if (!this.div || !this.getProjection) return;
+    var proj = this.getProjection();
+    this.div.innerHTML = '';
+    var self = this;
+    this.textsArr.forEach(function (t) {
+      var pos = dxfToLatLng(t.x, t.y);
+      if (!pos) return;
+      var point = proj.fromLatLngToDivPixel(new google.maps.LatLng(pos.lat, pos.lng));
+      var span = document.createElement('span');
+      span.textContent = (t.text || '').trim() || ' ';
+      span.style.position = 'absolute';
+      span.style.left = (point.x - 50) + 'px';
+      span.style.top = (point.y - 8) + 'px';
+      span.style.width = '100px';
+      span.style.fontSize = '12px';
+      span.style.fontWeight = 'bold';
+      span.style.color = '#FF3B30';
+      span.style.textAlign = 'center';
+      span.style.pointerEvents = 'auto';
+      span.style.cursor = 'pointer';
+      span.style.textShadow = '0 0 1px #fff, 0 0 2px #fff';
+      span.setAttribute('data-text-id', t.id);
+      span.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (Date.now() - lastLongPressEndTime < 600) return;
+        showTextModal(t.id);
+      });
+      self.div.appendChild(span);
     });
-    m.textId = t.id;
-    m.addListener('click', function () {
-      showTextModal(t.id);
-    });
-    textMarkers.push(m);
-  });
+  };
+  TextOnlyOverlay.prototype.onRemove = function () {
+    if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+    this.div = null;
+  };
+  textOverlay = new TextOnlyOverlay(texts);
 }
 
 function hideContextMenu() {
@@ -603,6 +643,7 @@ function bindMapLongPress() {
     var xy = latLngToDxf(latLng);
     if (xy) {
       pendingAddPosition = { x: xy.x, y: xy.y };
+      lastLongPressEndTime = Date.now();
       contextMenuEl.classList.add('active');
       contextMenuEl.style.left = (clientX != null ? clientX : window.innerWidth / 2) + 'px';
       contextMenuEl.style.top = (clientY != null ? clientY : window.innerHeight / 2) + 'px';
@@ -707,7 +748,7 @@ function compressImage(dataUrl, targetSize) {
   return new Promise(function (resolve, reject) {
     var img = new Image();
     img.onload = function () {
-      var maxDim = targetSize <= 500 * 1024 ? 800 : targetSize <= 1024 * 1024 ? 1200 : 1600;
+      var maxDim = targetSize <= 500 * 1024 ? 800 : targetSize <= 1024 * 1024 ? 1200 : targetSize <= 2 * 1024 * 1024 ? 1600 : 2000;
       var w = img.width;
       var h = img.height;
       if (w > maxDim || h > maxDim) {
@@ -724,27 +765,79 @@ function compressImage(dataUrl, targetSize) {
       canvas.height = h;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
-      var quality = 0.85;
-      var data = canvas.toDataURL('image/jpeg', quality);
-      var size = Math.floor((data.length - 22) * 0.75);
-      var minQ = 0.3;
-      var maxQ = 0.95;
-      for (var i = 0; i < 3 && Math.abs(size - targetSize) / targetSize > 0.15; i++) {
-        if (size > targetSize) {
-          maxQ = quality;
-          quality = (minQ + quality) / 2;
-        } else {
-          minQ = quality;
-          quality = (quality + maxQ) / 2;
-        }
-        quality = Math.max(0.3, Math.min(0.95, quality));
-        data = canvas.toDataURL('image/jpeg', quality);
-        size = Math.floor((data.length - 22) * 0.75);
+
+      function getActualBlobSize(dataUrlStr) {
+        return fetch(dataUrlStr).then(function (r) { return r.blob(); }).then(function (blob) { return blob.size; }).catch(function () {
+          return Promise.resolve(Math.floor((dataUrlStr.length - 22) * 0.75));
+        });
       }
-      ctx = null;
-      canvas.width = 0;
-      canvas.height = 0;
-      resolve(data);
+
+      var adjustedTarget = targetSize * 2.5;
+      var pixelCount = w * h;
+      var quality = Math.pow(adjustedTarget / (pixelCount * 0.25), 1 / 1.6);
+      quality = Math.max(0.4, Math.min(0.95, quality));
+      if (targetSize <= 500 * 1024) quality *= 1.2;
+      else if (targetSize <= 1024 * 1024) quality *= 1.15;
+      else quality *= 1.1;
+      quality = Math.max(0.4, Math.min(0.95, quality));
+
+      function tryCompress(q) {
+        var data = canvas.toDataURL('image/jpeg', q);
+        return getActualBlobSize(data).then(function (size) { return { data: data, size: size }; });
+      }
+
+      tryCompress(quality).then(function (first) {
+        var compressedData = first.data;
+        var compressedSize = first.size;
+        var minQ = 0.3;
+        var maxQ = 0.95;
+        var q = quality;
+        var tolerance = 0.12;
+        var maxIter = 3;
+        var iter = 0;
+        function next() {
+          var diffRatio = Math.abs(compressedSize - targetSize) / targetSize;
+          if (diffRatio <= tolerance || iter >= maxIter) {
+            if (compressedSize < targetSize * 0.7) {
+              var scaleFactor = Math.sqrt(targetSize / compressedSize) * 1.05;
+              var nw = Math.floor(w * scaleFactor);
+              var nh = Math.floor(h * scaleFactor);
+              canvas.width = nw;
+              canvas.height = nh;
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, nw, nh);
+              var nq = Math.pow(adjustedTarget / (nw * nh * 0.25), 1 / 1.6);
+              nq = Math.max(0.4, Math.min(0.9, nq));
+              return tryCompress(nq).then(function (r) {
+                ctx = null;
+                canvas.width = 0;
+                canvas.height = 0;
+                resolve(r.data);
+              });
+            }
+            ctx = null;
+            canvas.width = 0;
+            canvas.height = 0;
+            resolve(compressedData);
+            return;
+          }
+          iter++;
+          if (compressedSize > targetSize) {
+            maxQ = q;
+            q = (minQ + q) / 2;
+          } else {
+            minQ = q;
+            q = (q + maxQ) / 2;
+          }
+          q = Math.max(0.3, Math.min(0.95, q));
+          compressedData = canvas.toDataURL('image/jpeg', q);
+          getActualBlobSize(compressedData).then(function (size) {
+            compressedSize = size;
+            next();
+          });
+        }
+        next();
+      });
     };
     img.onerror = function () { reject(new Error('이미지 로드 실패')); };
     img.src = dataUrl;
