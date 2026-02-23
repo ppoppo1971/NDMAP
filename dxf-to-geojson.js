@@ -220,7 +220,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [c1, c2] },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick, entityType: 'LINE' }
     };
   }
 
@@ -243,13 +243,13 @@
       return {
         type: 'Feature',
         geometry: { type: 'Polygon', coordinates: [coords] },
-        properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick }
+        properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick, entityType: entity.type || 'LWPOLYLINE' }
       };
     }
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick, entityType: entity.type || 'LWPOLYLINE' }
     };
   }
 
@@ -269,7 +269,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick, entityType: 'CIRCLE' }
     };
   }
 
@@ -292,7 +292,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick, entityType: 'ARC' }
     };
   }
 
@@ -304,7 +304,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: ll },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, entityType: 'POINT' }
     };
   }
 
@@ -316,7 +316,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: ll },
-      properties: { layer: entity.layer || '', text: entity.text || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', text: entity.text || '', strokeColor: strokeColor, entityType: entity.type || 'TEXT' }
     };
   }
 
@@ -332,7 +332,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick, entityType: 'SPLINE' }
     };
   }
 
@@ -361,7 +361,7 @@
         c1 = blockEntity.startPoint && tf(blockEntity.startPoint.x, blockEntity.startPoint.y);
         c2 = blockEntity.endPoint && tf(blockEntity.endPoint.x, blockEntity.endPoint.y);
         if (!c1 || !c2) return null;
-        return { type: 'Feature', geometry: { type: 'LineString', coordinates: [c1, c2] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: [c1, c2] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick, entityType: 'INSERT' } };
       case 'LWPOLYLINE':
       case 'POLYLINE':
         if (!blockEntity.vertices || blockEntity.vertices.length < 2) return null;
@@ -374,9 +374,9 @@
         closed = blockEntity.closed || blockEntity.shape;
         if (closed && coords.length >= 4) {
           coords.push(coords[0]);
-          return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick } };
+          return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick, entityType: 'INSERT' } };
         }
-        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick, entityType: 'INSERT' } };
       case 'CIRCLE':
         var cx = blockEntity.center && blockEntity.center.x;
         var cy = blockEntity.center && blockEntity.center.y;
@@ -389,7 +389,7 @@
           if (ll) coords.push(ll);
         }
         if (coords.length < 4) return null;
-        return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick } };
+        return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick, entityType: 'INSERT' } };
       case 'ARC':
         cx = blockEntity.center && blockEntity.center.x;
         cy = blockEntity.center && blockEntity.center.y;
@@ -406,7 +406,7 @@
           if (ll) coords.push(ll);
         }
         if (coords.length < 2) return null;
-        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick, entityType: 'INSERT' } };
       case 'SPLINE':
         if (!blockEntity.controlPoints || blockEntity.controlPoints.length < 2) return null;
         coords = [];
@@ -415,19 +415,19 @@
           if (ll) coords.push(ll);
         }
         if (coords.length < 2) return null;
-        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick, entityType: 'INSERT' } };
       case 'POINT':
         if (!blockEntity.position) return null;
         c1 = tf(blockEntity.position.x, blockEntity.position.y);
         if (!c1) return null;
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, entityType: 'INSERT' } };
       case 'TEXT':
       case 'MTEXT':
       case 'INSERT':
         if (!blockEntity.position) return null;
         c1 = tf(blockEntity.position.x, blockEntity.position.y);
         if (!c1) return null;
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, entityType: 'INSERT' } };
       default:
         return null;
     }
