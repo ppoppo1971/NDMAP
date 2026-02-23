@@ -165,20 +165,30 @@
     return ll ? ll : null;
   }
 
+  /** 두께가 0 초과인지 (constantWidth 또는 lineweight). 점선/구별 표시용 */
+  function isThickLine(entity) {
+    var cw = entity.constantWidth;
+    var lw = entity.lineweight;
+    if (typeof cw === 'number' && cw > 0) return true;
+    if (typeof lw === 'number' && lw > 0) return true;
+    return false;
+  }
+
   function entityToFeature(entity, dxfData) {
     if (!entity || !entity.type) return null;
     var strokeColor = getEntityColor(entity, dxfData);
+    var thick = isThickLine(entity);
 
     switch (entity.type) {
       case 'LINE':
-        return lineToFeature(entity, strokeColor);
+        return lineToFeature(entity, strokeColor, thick);
       case 'LWPOLYLINE':
       case 'POLYLINE':
-        return polylineToFeature(entity, strokeColor);
+        return polylineToFeature(entity, strokeColor, thick);
       case 'CIRCLE':
-        return circleToFeature(entity, strokeColor);
+        return circleToFeature(entity, strokeColor, thick);
       case 'ARC':
-        return arcToFeature(entity, strokeColor);
+        return arcToFeature(entity, strokeColor, thick);
       case 'POINT':
         return pointToFeature(entity, strokeColor);
       case 'TEXT':
@@ -186,13 +196,13 @@
       case 'INSERT':
         return positionToFeature(entity, strokeColor);
       case 'SPLINE':
-        return splineToFeature(entity, strokeColor);
+        return splineToFeature(entity, strokeColor, thick);
       default:
         return null;
     }
   }
 
-  function lineToFeature(entity, strokeColor) {
+  function lineToFeature(entity, strokeColor, thick) {
     var sp = entity.startPoint;
     var ep = entity.endPoint;
     if (!sp || !ep) return null;
@@ -202,11 +212,11 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [c1, c2] },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
     };
   }
 
-  function polylineToFeature(entity, strokeColor) {
+  function polylineToFeature(entity, strokeColor, thick) {
     var verts = entity.vertices;
     if (!verts || verts.length < 2) return null;
     var coords = [];
@@ -225,17 +235,17 @@
       return {
         type: 'Feature',
         geometry: { type: 'Polygon', coordinates: [coords] },
-        properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor }
+        properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick }
       };
     }
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
     };
   }
 
-  function circleToFeature(entity, strokeColor) {
+  function circleToFeature(entity, strokeColor, thick) {
     var cx = entity.center && entity.center.x;
     var cy = entity.center && entity.center.y;
     var r = entity.radius;
@@ -251,11 +261,11 @@
     return {
       type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: !!thick }
     };
   }
 
-  function arcToFeature(entity, strokeColor) {
+  function arcToFeature(entity, strokeColor, thick) {
     var cx = entity.center && entity.center.x;
     var cy = entity.center && entity.center.y;
     var r = entity.radius;
@@ -274,7 +284,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
     };
   }
 
@@ -302,7 +312,7 @@
     };
   }
 
-  function splineToFeature(entity, strokeColor) {
+  function splineToFeature(entity, strokeColor, thick) {
     var cps = entity.controlPoints;
     if (!cps || cps.length < 2) return null;
     var coords = [];
@@ -314,7 +324,7 @@
     return {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
-      properties: { layer: entity.layer || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
     };
   }
 

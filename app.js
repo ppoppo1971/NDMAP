@@ -11,6 +11,7 @@ var dxfFileName = '';
 var dxfFileFullName = ''; // 저장소 키 (파일명과 동일)
 var dxfBoundsLatLng = null;
 var currentMapType = 'none';
+var dxfThickPolylines = []; // 두께>0 폴리선 점선 표시용 (VMAP 스타일)
 
 var photos = [];
 var texts = [];
@@ -225,19 +226,59 @@ function applyDxfToMap() {
   if (!map || !dxfData || !window.DxfToGeoJSON) return;
   var geoJson = window.DxfToGeoJSON.dxfToGeoJSON(dxfData);
   map.data.forEach(function (feature) { map.data.remove(feature); });
+  dxfThickPolylines.forEach(function (pl) { pl.setMap(null); });
+  dxfThickPolylines = [];
   if (geoJson.features && geoJson.features.length > 0) {
-    map.data.addGeoJson(geoJson);
-    map.data.setStyle(function (feature) {
-      var strokeColor = feature.getProperty('strokeColor') || '#333';
-      var fillColor = feature.getProperty('fillColor') || strokeColor;
-      return {
-        strokeColor: strokeColor,
-        strokeWeight: 1,
-        strokeOpacity: 0.9,
-        fillColor: fillColor,
-        fillOpacity: 0.15,
+    var thinFeatures = [];
+    var thickFeatures = [];
+    geoJson.features.forEach(function (f) {
+      if (f.properties && f.properties.thick) thickFeatures.push(f);
+      else thinFeatures.push(f);
+    });
+    if (thinFeatures.length > 0) {
+      map.data.addGeoJson({ type: 'FeatureCollection', features: thinFeatures });
+      map.data.setStyle(function (feature) {
+        var strokeColor = feature.getProperty('strokeColor') || '#333';
+        var fillColor = feature.getProperty('fillColor') || strokeColor;
+        return {
+          strokeColor: strokeColor,
+          strokeWeight: 1,
+          strokeOpacity: 0.9,
+          fillColor: fillColor,
+          fillOpacity: 0.15,
+          clickable: false
+        };
+      });
+    }
+    thickFeatures.forEach(function (feature) {
+      var geom = feature.geometry;
+      var coords = geom && geom.coordinates;
+      if (!coords || coords.length < 2) return;
+      if (geom.type === 'Polygon' && coords[0] && coords[0].length >= 2) coords = coords[0];
+      var path = coords.map(function (c) { return { lat: c[1], lng: c[0] }; });
+      var strokeColor = (feature.properties && feature.properties.strokeColor) || '#333';
+      var pl = new google.maps.Polyline({
+        path: path,
+        geodesic: false,
+        strokeColor: 'transparent',
+        strokeOpacity: 0,
+        strokeWeight: 0,
+        icons: [{
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: strokeColor,
+            fillOpacity: 0.9,
+            strokeColor: strokeColor,
+            strokeWeight: 0.5,
+            scale: 2.5
+          },
+          offset: '0',
+          repeat: '10px'
+        }],
+        map: map,
         clickable: false
-      };
+      });
+      dxfThickPolylines.push(pl);
     });
     dxfBoundsLatLng = boundsFromGeoJSON(geoJson);
   } else {
