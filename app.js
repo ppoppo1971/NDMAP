@@ -33,6 +33,7 @@ var mapTypeSelector = null;
 var editingPhotoId = null;
 var editingTextId = null;
 var imageSizeSetting = typeof localStorage !== 'undefined' ? (localStorage.getItem('dmap:imageSize') || '2MB') : '2MB';
+var exportInfo = null; // 내보내기 방식 선택 모달용 { photos, totalSizeMB }
 
 /**
  * Google Maps API 로드 후 콜백
@@ -134,17 +135,24 @@ function bindUI() {
       alert('저장된 자료가 없습니다.');
       return;
     }
-    showLoading(true);
-    window.localStore.exportProjectZip(dxfFileFullName, function (cur, total, name) {
-      console.log('내보내기 ' + cur + '/' + total + ' ' + name);
-    }).then(function () {
-      showLoading(false);
-      alert('내보내기 완료.');
-    }).catch(function (err) {
-      showLoading(false);
-      alert('내보내기 실패: ' + (err && err.message ? err.message : err));
-    });
+    exportLocalData();
   });
+
+  var exportMethodModal = document.getElementById('export-method-modal');
+  var exportInfoBox = document.getElementById('export-info-box');
+  var exportMethodClose = document.getElementById('export-method-close');
+  var exportMethodCancel = document.getElementById('export-method-cancel');
+  var exportZipBtn = document.getElementById('export-zip-btn');
+  var exportIndividualBtn = document.getElementById('export-individual-btn');
+  if (exportMethodClose) exportMethodClose.addEventListener('click', hideExportMethodModal);
+  if (exportMethodCancel) exportMethodCancel.addEventListener('click', hideExportMethodModal);
+  if (exportZipBtn) exportZipBtn.addEventListener('click', exportAsZip);
+  if (exportIndividualBtn) exportIndividualBtn.addEventListener('click', exportAsIndividual);
+  if (exportMethodModal) {
+    exportMethodModal.addEventListener('click', function (e) {
+      if (e.target === exportMethodModal) hideExportMethodModal();
+    });
+  }
 
   document.getElementById('zoom-fit').addEventListener('click', fitDxfToView);
   document.getElementById('zoom-in').addEventListener('click', function () {
@@ -169,6 +177,65 @@ function bindUI() {
 
 function showLoading(show) {
   if (loadingEl) loadingEl.classList.toggle('active', !!show);
+}
+
+function exportLocalData() {
+  window.localStore.loadPhotos(dxfFileFullName).then(function (photosList) {
+    var totalSize = 0;
+    if (photosList && photosList.length) {
+      photosList.forEach(function (p) { if (p.blob) totalSize += p.blob.size; });
+    }
+    exportInfo = {
+      photos: photosList || [],
+      totalSizeMB: (totalSize / 1024 / 1024).toFixed(1)
+    };
+    showExportMethodModal();
+  }).catch(function (err) {
+    console.error('내보내기 준비 실패:', err);
+    alert('내보내기 준비 실패: ' + (err && err.message ? err.message : err));
+  });
+}
+
+function showExportMethodModal() {
+  var modal = document.getElementById('export-method-modal');
+  var infoBox = document.getElementById('export-info-box');
+  if (modal) modal.classList.add('active');
+  if (infoBox && exportInfo) {
+    infoBox.textContent = '사진 ' + exportInfo.photos.length + '장, 총 ' + exportInfo.totalSizeMB + 'MB';
+  }
+}
+
+function hideExportMethodModal() {
+  var modal = document.getElementById('export-method-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function exportAsZip() {
+  hideExportMethodModal();
+  if (!dxfFileFullName || !window.localStore) return;
+  showLoading(true);
+  window.localStore.exportAsZipOnly(dxfFileFullName).then(function () {
+    showLoading(false);
+    alert('내보내기 완료.');
+  }).catch(function (err) {
+    showLoading(false);
+    alert('내보내기 실패: ' + (err && err.message ? err.message : err));
+  });
+}
+
+function exportAsIndividual() {
+  hideExportMethodModal();
+  if (!dxfFileFullName || !window.localStore) return;
+  showLoading(true);
+  window.localStore.exportProjectSequential(dxfFileFullName, function (cur, total, name) {
+    console.log('내보내기 ' + cur + '/' + total + ' ' + name);
+  }).then(function () {
+    showLoading(false);
+    alert('내보내기 완료.');
+  }).catch(function (err) {
+    showLoading(false);
+    alert('내보내기 실패: ' + (err && err.message ? err.message : err));
+  });
 }
 
 function showFileList() {
@@ -322,6 +389,24 @@ function getImageTargetSize() {
     case 'original': return null;
     default: return 2 * 1024 * 1024;
   }
+}
+
+/** ADMAP과 동일: DXF 파일 기준명(.dxf 제외) */
+function getDxfBaseName() {
+  var base = dxfFileFullName || (dxfFileName ? dxfFileName + '.dxf' : 'photo');
+  return base.replace(/\.dxf$/i, '');
+}
+
+/** ADMAP과 동일: 사진 파일명 = 기준명_photo_MMDDHHmmss.jpg */
+function generatePhotoFileName() {
+  var baseName = getDxfBaseName();
+  var now = new Date();
+  var mm = String(now.getMonth() + 1).padStart(2, '0');
+  var dd = String(now.getDate()).padStart(2, '0');
+  var hh = String(now.getHours()).padStart(2, '0');
+  var min = String(now.getMinutes()).padStart(2, '0');
+  var ss = String(now.getSeconds()).padStart(2, '0');
+  return baseName + '_photo_' + mm + dd + hh + min + ss + '.jpg';
 }
 
 function showImageSizeModal() {
@@ -676,8 +761,8 @@ function addPhotoAtPosition(xy, file) {
     function finish(useDataUrl) {
       var blob = window.localStore.dataUrlToBlob(useDataUrl);
       var photo = {
-        id: id, x: xy.x, y: xy.y, width: 200, height: 200,
-        blob: blob, memo: '', fileName: file.name || 'photo.jpg',
+        id: id, x: xy.x, y: xy.y, width: 1, height: 1,
+        blob: blob, memo: '', fileName: generatePhotoFileName(),
         createdAt: new Date().toISOString()
       };
       photos.push(photo);

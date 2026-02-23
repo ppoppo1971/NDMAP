@@ -186,6 +186,116 @@
     });
   }
 
+  function encodeUtf8(str) {
+    return new TextEncoder().encode(str);
+  }
+
+  function crc32(bytes) {
+    var table = crc32.table;
+    if (!table) {
+      table = new Uint32Array(256);
+      for (var i = 0; i < 256; i++) {
+        var c = i;
+        for (var k = 0; k < 8; k++) {
+          c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[i] = c >>> 0;
+      }
+      crc32.table = table;
+    }
+    var crc = 0xffffffff;
+    for (var i = 0; i < bytes.length; i++) {
+      crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function toDosDateTime(date) {
+    var dt = date instanceof Date ? date : new Date();
+    var year = Math.max(1980, dt.getFullYear());
+    var month = dt.getMonth() + 1;
+    var day = dt.getDate();
+    var hours = dt.getHours();
+    var minutes = dt.getMinutes();
+    var seconds = Math.floor(dt.getSeconds() / 2);
+    var dosTime = (hours << 11) | (minutes << 5) | seconds;
+    var dosDate = ((year - 1980) << 9) | (month << 5) | day;
+    return { dosTime: dosTime, dosDate: dosDate };
+  }
+
+  function createZip(entries) {
+    var offset = 0;
+    var fileParts = [];
+    var centralParts = [];
+    function process(i) {
+      if (i >= entries.length) {
+        var centralSize = 0;
+        for (var k = 0; k < centralParts.length; k++) centralSize += centralParts[k].length;
+        var fileCount = entries.length;
+        var endRecord = new ArrayBuffer(22);
+        var endView = new DataView(endRecord);
+        endView.setUint32(0, 0x06054b50, true);
+        endView.setUint16(4, 0, true);
+        endView.setUint16(6, 0, true);
+        endView.setUint16(8, fileCount, true);
+        endView.setUint16(10, fileCount, true);
+        endView.setUint32(12, centralSize, true);
+        endView.setUint32(16, offset, true);
+        endView.setUint16(20, 0, true);
+        var allParts = fileParts.concat(centralParts).concat([new Uint8Array(endRecord)]);
+        return Promise.resolve(new Blob(allParts, { type: 'application/zip' }));
+      }
+      var entry = entries[i];
+      var nameBytes = encodeUtf8(entry.name);
+      return entry.blob.arrayBuffer().then(function (arrayBuffer) {
+        var dataBytes = new Uint8Array(arrayBuffer);
+        var crcVal = crc32(dataBytes);
+        var size = dataBytes.length;
+        var dos = toDosDateTime(entry.modifiedAt);
+        var flags = 0x0800;
+        var localHeader = new ArrayBuffer(30 + nameBytes.length);
+        var localView = new DataView(localHeader);
+        localView.setUint32(0, 0x04034b50, true);
+        localView.setUint16(4, 20, true);
+        localView.setUint16(6, flags, true);
+        localView.setUint16(8, 0, true);
+        localView.setUint16(10, dos.dosTime, true);
+        localView.setUint16(12, dos.dosDate, true);
+        localView.setUint32(14, crcVal, true);
+        localView.setUint32(18, size, true);
+        localView.setUint32(22, size, true);
+        localView.setUint16(26, nameBytes.length, true);
+        localView.setUint16(28, 0, true);
+        new Uint8Array(localHeader).set(nameBytes, 30);
+        fileParts.push(new Uint8Array(localHeader), dataBytes);
+        var centralHeader = new ArrayBuffer(46 + nameBytes.length);
+        var centralView = new DataView(centralHeader);
+        centralView.setUint32(0, 0x02014b50, true);
+        centralView.setUint16(4, 20, true);
+        centralView.setUint16(6, 20, true);
+        centralView.setUint16(8, flags, true);
+        centralView.setUint16(10, 0, true);
+        centralView.setUint16(12, dos.dosTime, true);
+        centralView.setUint16(14, dos.dosDate, true);
+        centralView.setUint32(16, crcVal, true);
+        centralView.setUint32(20, size, true);
+        centralView.setUint32(24, size, true);
+        centralView.setUint16(28, nameBytes.length, true);
+        centralView.setUint16(30, 0, true);
+        centralView.setUint16(32, 0, true);
+        centralView.setUint16(34, 0, true);
+        centralView.setUint16(36, 0, true);
+        centralView.setUint32(38, 0, true);
+        centralView.setUint32(42, offset, true);
+        new Uint8Array(centralHeader).set(nameBytes, 46);
+        centralParts.push(new Uint8Array(centralHeader));
+        offset += localHeader.byteLength + size;
+        return process(i + 1);
+      });
+    }
+    return process(0);
+  }
+
   function normalizeBaseName(dxfFile) {
     return (dxfFile || 'photo').replace(/\.dxf$/i, '');
   }
@@ -235,7 +345,43 @@
   }
 
   function exportAsZipOnly(dxfFile) {
-    return exportProjectSequential(dxfFile);
+    return Promise.all([loadProject(dxfFile), loadPhotos(dxfFile)]).then(function (res) {
+      var project = res[0] || {};
+      var photos = res[1] || [];
+      var baseName = normalizeBaseName(dxfFile);
+      var metadata = {
+        dxfFile: dxfFile,
+        photos: photos.map(function (p) {
+          return {
+            id: p.id, fileName: p.fileName,
+            position: { x: p.x, y: p.y },
+            size: { width: p.width, height: p.height },
+            memo: p.memo || '', uploaded: true
+          };
+        }),
+        texts: project.texts || [],
+        lastModified: project.lastModified || new Date().toISOString()
+      };
+      var metadataBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
+      var entries = [
+        { name: baseName + '_metadata.json', blob: metadataBlob, modifiedAt: new Date() }
+      ];
+      photos.forEach(function (p) {
+        if (p.blob && p.fileName) {
+          entries.push({
+            name: p.fileName,
+            blob: p.blob,
+            modifiedAt: new Date(p.updatedAt || Date.now())
+          });
+        }
+      });
+      return createZip(entries).then(function (zipBlob) {
+        var zipName = baseName + '_export.zip';
+        return downloadFile(zipBlob, zipName).then(function () {
+          return { success: true, type: 'zip', fileName: zipName };
+        });
+      });
+    });
   }
 
   function getPhotoDataUrl(photoId) {

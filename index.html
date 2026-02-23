@@ -134,6 +134,8 @@
     .close-btn { font-size: 24px; color: #999; cursor: pointer; line-height: 1; }
     .btn-delete { background: #FF3B30; color: white; }
     .btn-delete:active { background: #C60B00; }
+    .btn-cancel { background: #e0e0e0; color: #333; }
+    .btn-cancel:active { background: #ccc; }
     .info-box { background: #E3F2FD; padding: 12px; border-radius: 8px; font-size: 14px; }
   </style>
 </head>
@@ -188,6 +190,30 @@
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
   </div>
   <div class="menu-overlay" id="menu-overlay"></div>
+
+  <!-- 내보내기 방식 선택 모달 (ADMAP과 동일) -->
+  <div class="modal" id="export-method-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📦 내보내기 방식 선택</h3>
+        <span class="close-btn" id="export-method-close">&times;</span>
+      </div>
+      <div class="info-box" id="export-info-box">사진 0장, 총 0MB</div>
+      <div style="display:flex; flex-direction:column; gap:12px; margin:15px 0;">
+        <button type="button" class="btn" id="export-zip-btn" style="background:#007AFF; text-align:left; padding:15px;">
+          <strong>📁 ZIP 파일</strong><br>
+          <span style="font-size:12px; opacity:0.8;">하나의 압축 파일로 다운로드 (소용량 권장)</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="export-individual-btn" style="text-align:left; padding:15px;">
+          <strong>📷 개별 다운로드</strong><br>
+          <span style="font-size:12px; opacity:0.8;">파일을 하나씩 순차 다운로드 (대용량·안정성 권장)</span>
+        </button>
+      </div>
+      <div style="margin-top:15px;">
+        <button type="button" class="btn-cancel" id="export-method-cancel">취소</button>
+      </div>
+    </div>
+  </div>
 
   <div class="loading" id="loading">
     <div class="spinner"></div>
