@@ -228,11 +228,13 @@ function applyDxfToMap() {
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
     map.data.setStyle(function (feature) {
+      var strokeColor = feature.getProperty('strokeColor') || '#333';
+      var fillColor = feature.getProperty('fillColor') || strokeColor;
       return {
-        strokeColor: '#333',
+        strokeColor: strokeColor,
         strokeWeight: 1,
         strokeOpacity: 0.9,
-        fillColor: '#666',
+        fillColor: fillColor,
         fillOpacity: 0.15,
         clickable: false
       };
