@@ -114,11 +114,6 @@ function bindUI() {
     menuOverlay.classList.remove('active');
     showFileList();
   });
-  document.getElementById('menu-fit-view').addEventListener('click', function () {
-    slideMenu.classList.remove('active');
-    menuOverlay.classList.remove('active');
-    fitDxfToView();
-  });
   document.getElementById('menu-map-type').addEventListener('click', function () {
     slideMenu.classList.remove('active');
     if (mapTypeSelector) {
@@ -252,6 +247,104 @@ function showViewer() {
   if (viewerUI) viewerUI.classList.remove('hidden');
 }
 
+/**
+ * DXF 원본 텍스트에서 constantWidth(그룹코드 43)를 추출하여 엔티티에 추가.
+ * 파서가 constantWidth를 파싱하지 못하는 경우를 대비 (ADMAP 방식).
+ */
+function extractConstantWidths(dxfData, dxfText) {
+  if (!dxfData || !dxfData.entities || !dxfText || typeof dxfText !== 'string') return;
+  var lines = dxfText.split(/\r?\n/);
+  var mapList = [];
+  var inEntity = false;
+  var currentLayer = '';
+  var constantWidth = null;
+  var entityType = '';
+  var firstX = null;
+  var firstY = null;
+  var i, line, nextLine, j, val;
+  function pushCurrent() {
+    if (inEntity && constantWidth !== null && currentLayer) {
+      mapList.push({
+        layer: currentLayer,
+        constantWidth: constantWidth,
+        type: entityType,
+        firstVertex: firstX !== null && firstY !== null ? { x: firstX, y: firstY } : null
+      });
+    }
+  }
+  for (i = 0; i < lines.length; i++) {
+    line = lines[i].trim();
+    if (line === 'LWPOLYLINE' || line === 'POLYLINE') {
+      pushCurrent();
+      inEntity = true;
+      entityType = line;
+      currentLayer = '';
+      constantWidth = null;
+      firstX = null;
+      firstY = null;
+    } else if (inEntity) {
+      if (line === '8' && i + 1 < lines.length) {
+        currentLayer = lines[i + 1].trim();
+      } else if (line === '100' && i + 1 < lines.length && lines[i + 1].trim() === 'AcDbPolyline') {
+        for (j = i + 2; j < Math.min(i + 20, lines.length); j++) {
+          nextLine = lines[j].trim();
+          if (nextLine === '43' && j + 1 < lines.length) {
+            val = parseFloat(lines[j + 1].trim());
+            if (!isNaN(val)) { constantWidth = val; break; }
+          } else if (nextLine === '10') break;
+        }
+      } else if (line === '43' && i + 1 < lines.length && constantWidth === null) {
+        val = parseFloat(lines[i + 1].trim());
+        if (!isNaN(val)) constantWidth = val;
+      } else if (line === '10' && i + 1 < lines.length && firstX === null) {
+        val = parseFloat(lines[i + 1].trim());
+        if (!isNaN(val)) firstX = val;
+      } else if (line === '20' && i + 1 < lines.length && firstX !== null && firstY === null) {
+        val = parseFloat(lines[i + 1].trim());
+        if (!isNaN(val)) firstY = val;
+      } else if (line === '0' || line === 'SEQEND') {
+        pushCurrent();
+        inEntity = false;
+        currentLayer = '';
+        constantWidth = null;
+        firstX = null;
+        firstY = null;
+      }
+    }
+  }
+  pushCurrent();
+  var mapIndex = 0;
+  dxfData.entities.forEach(function (entity) {
+    if (entity.type !== 'LWPOLYLINE' && entity.type !== 'POLYLINE') return;
+    if (entity.constantWidth !== undefined && entity.constantWidth !== null) return;
+    var best = null;
+    var bestScore = -1;
+    for (var k = 0; k < mapList.length; k++) {
+      var item = mapList[k];
+      if (item.type !== entity.type || item.layer !== entity.layer) continue;
+      var score = 0;
+      if (entity.vertices && entity.vertices.length > 0 && item.firstVertex) {
+        var v0 = entity.vertices[0];
+        var th = 0.001;
+        if (Math.abs(v0.x - item.firstVertex.x) < th && Math.abs(v0.y - item.firstVertex.y) < th) {
+          score = 100;
+          best = item;
+          bestScore = score;
+          break;
+        }
+      }
+      if (score === 0) {
+        score = 100 - Math.abs(k - mapIndex);
+        if (score > bestScore) { best = item; bestScore = score; }
+      }
+    }
+    if (best) {
+      entity.constantWidth = best.constantWidth;
+      mapIndex = mapList.indexOf(best) + 1;
+    }
+  });
+}
+
 function loadDxfFile(file) {
   if (!file || !file.name) return;
   showLoading(true);
@@ -269,6 +362,7 @@ function loadDxfFile(file) {
       if (!dxfData.entities || dxfData.entities.length === 0) {
         console.warn('DXF 엔티티 없음');
       }
+      extractConstantWidths(dxfData, text);
       dxfFileName = file.name;
       dxfFileFullName = file.name;
       applyDxfToMap();
@@ -723,21 +817,11 @@ function bindContextMenu() {
     var input = document.getElementById('camera-input');
     if (input) { input.click(); }
   });
-  document.getElementById('gallery-btn').addEventListener('click', function () {
-    contextMenuEl.classList.remove('active');
-    var input = document.getElementById('gallery-input');
-    if (input) { input.click(); }
-  });
   document.getElementById('text-btn').addEventListener('click', function () {
     contextMenuEl.classList.remove('active');
     pendingAddPosition && showTextModal(null);
   });
   document.getElementById('camera-input').addEventListener('change', function (e) {
-    var file = e.target && e.target.files[0];
-    if (file && pendingAddPosition) addPhotoAtPosition(pendingAddPosition, file);
-    e.target.value = '';
-  });
-  document.getElementById('gallery-input').addEventListener('change', function (e) {
     var file = e.target && e.target.files[0];
     if (file && pendingAddPosition) addPhotoAtPosition(pendingAddPosition, file);
     e.target.value = '';

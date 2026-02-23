@@ -74,10 +74,6 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;
     }
     .zoom-btn:active { background: #007AFF; color: white; }
-    .zoom-level-display {
-      position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white;
-      padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 12;
-    }
     .slide-menu {
       position: fixed; top: 0; right: -300px; width: 250px; height: 100vh; background: white;
       box-shadow: -4px 0 12px rgba(0,0,0,0.3); z-index: 1001; transition: right 0.3s ease-out; padding-top: 80px;
@@ -170,7 +166,6 @@
       <button class="zoom-btn" id="zoom-in" type="button">+</button>
       <button class="zoom-btn" id="zoom-out" type="button">−</button>
     </div>
-    <div class="zoom-level-display" id="zoom-level-display">×1.0</div>
   </div>
 
   <!-- 배경 지도 선택 -->
@@ -184,7 +179,6 @@
   <!-- 슬라이드 메뉴 -->
   <div class="slide-menu" id="slide-menu">
     <button class="slide-menu-item" id="menu-back-to-list">목록</button>
-    <button class="slide-menu-item" id="menu-fit-view">전체보기</button>
     <button class="slide-menu-item" id="menu-map-type">배경 지도</button>
     <button class="slide-menu-item" id="menu-image-size">용량조정</button>
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
@@ -223,11 +217,9 @@
   <!-- 롱프레스 컨텍스트 메뉴 -->
   <div class="context-menu" id="context-menu">
     <button type="button" class="context-menu-item" id="camera-btn">📷 사진 촬영</button>
-    <button type="button" class="context-menu-item" id="gallery-btn">🖼️ 사진 선택</button>
     <button type="button" class="context-menu-item" id="text-btn">📝 텍스트 입력</button>
   </div>
   <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
-  <input type="file" id="gallery-input" accept="image/*" style="display:none">
 
   <!-- 사진 보기 모달 -->
   <div class="modal" id="photo-modal">
