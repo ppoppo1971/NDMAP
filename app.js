@@ -421,18 +421,32 @@ function clearTextMarkers() {
 function drawPhotoMarkers() {
   clearPhotoMarkers();
   if (!map || !window.DxfToGeoJSON) return;
-  var defaultIcon = {
-    url: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23FF00FF"><circle cx="12" cy="12" r="10"/></svg>'),
-    scaledSize: new google.maps.Size(19, 19),
-    anchor: new google.maps.Point(9.5, 9.5)
-  };
   photos.forEach(function (p) {
     var pos = dxfToLatLng(p.x, p.y);
     if (!pos) return;
+    var isUploaded = p.uploaded !== false;
+    var hasMemo = p.memo && String(p.memo).trim();
+    var markerColor;
+    var sizePx;
+    if (isUploaded) {
+      markerColor = hasMemo ? '#9B51E0' : '#FF0000';
+      sizePx = 12;
+    } else {
+      markerColor = '#00C853';
+      sizePx = 38;
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+      '<circle cx="12" cy="12" r="10" fill="' + markerColor + '" stroke="#FFFFFF" stroke-width="1.5"/>' +
+      '</svg>';
+    var icon = {
+      url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(sizePx, sizePx),
+      anchor: new google.maps.Point(sizePx / 2, sizePx / 2)
+    };
     var m = new google.maps.Marker({
       map: map,
       position: pos,
-      icon: defaultIcon,
+      icon: icon,
       title: p.memo || p.fileName || '사진'
     });
     m.photoId = p.id;
