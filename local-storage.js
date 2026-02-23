@@ -312,12 +312,15 @@
         photos: photos.map(function (p) {
           return {
             id: p.id, fileName: p.fileName,
-            position: { x: p.x, y: p.y },
+            position: { x: p.x, y: -p.y },
             size: { width: p.width, height: p.height },
             memo: p.memo || '', uploaded: true
           };
         }),
-        texts: project.texts || [],
+        texts: (project.texts || []).map(function (t) {
+          var out = {}; for (var k in t) if (Object.prototype.hasOwnProperty.call(t, k)) out[k] = t[k];
+          out.y = typeof t.y === 'number' ? -t.y : t.y; return out;
+        }),
         lastModified: project.lastModified || new Date().toISOString()
       };
       var metaBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
@@ -354,12 +357,15 @@
         photos: photos.map(function (p) {
           return {
             id: p.id, fileName: p.fileName,
-            position: { x: p.x, y: p.y },
+            position: { x: p.x, y: -p.y },
             size: { width: p.width, height: p.height },
             memo: p.memo || '', uploaded: true
           };
         }),
-        texts: project.texts || [],
+        texts: (project.texts || []).map(function (t) {
+          var out = {}; for (var k in t) if (Object.prototype.hasOwnProperty.call(t, k)) out[k] = t[k];
+          out.y = typeof t.y === 'number' ? -t.y : t.y; return out;
+        }),
         lastModified: project.lastModified || new Date().toISOString()
       };
       var metadataBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });

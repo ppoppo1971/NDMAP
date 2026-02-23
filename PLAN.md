@@ -91,6 +91,11 @@ VMAP을 참고하여 지도 엔진·배경 선택을 적용합니다.
 - **구현**: INSERT 발생 시 블록 내부 엔티티(LINE, LWPOLYLINE, CIRCLE, ARC, SPLINE, POINT 등)에 **위치·축척·회전** 변환을 적용한 뒤, 기존과 동일한 GeoJSON(LineString/Polygon/Point)으로 변환해 Data 레이어에 추가. 변환 순서는 ADMAP과 동일(기준점 보정 → scale → rotate → insert 위치).
 - 블록이 없거나 엔티티가 없으면 기존처럼 삽입 위치만 Point로 표시.
 
+## 구현 노트: 메타데이터 좌표 (ADMAP/오토캐드 호환)
+
+- ADMAP은 viewBox에서 **Y축을 반전**(`viewBox.y = -(maxY+margin)`)해 저장하므로, 내보낸 메타데이터의 `position.y`는 DXF의 **-y** 값이다. InsertPhotos.lsp는 `(x, -y)`로 해석해 DXF에 배치한다.
+- new_dmap은 앱/DB에는 DXF 좌표계 그대로 (x, y)를 저장하고, **내보내기할 때만** `position: { x: p.x, y: -p.y }`, 텍스트도 `y: -t.y`로 내보내 ADMAP·오토캐드와 동일한 형식으로 맞춘다.
+
 ## 구현 노트: DXF 두께 표시
 
 - **두께 판별**: DXF `constantWidth`(그룹코드 43) > 0 또는 `lineweight`(370) > 0 이면 "두꺼운 선"으로 간주.
