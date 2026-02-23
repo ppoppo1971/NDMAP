@@ -422,9 +422,9 @@ function drawPhotoMarkers() {
   clearPhotoMarkers();
   if (!map || !window.DxfToGeoJSON) return;
   var defaultIcon = {
-    url: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23007AFF"><circle cx="12" cy="12" r="10"/></svg>'),
-    scaledSize: new google.maps.Size(24, 24),
-    anchor: new google.maps.Point(12, 12)
+    url: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23FF00FF"><circle cx="12" cy="12" r="10"/></svg>'),
+    scaledSize: new google.maps.Size(19, 19),
+    anchor: new google.maps.Point(9.5, 9.5)
   };
   photos.forEach(function (p) {
     var pos = dxfToLatLng(p.x, p.y);
