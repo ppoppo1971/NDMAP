@@ -85,6 +85,12 @@ VMAP을 참고하여 지도 엔진·배경 선택을 적용합니다.
 - [x] DXF 로드 시 IndexedDB에서 메타데이터·사진 로드 후 마커 그리기
 - [x] 슬라이드 메뉴: 자료 내보내기 (순차 다운로드)
 
+## 구현 노트: 블록(INSERT) 표시
+
+- **방식**: DXF에서 보이는 그대로 표시 **가능**. INSERT를 단일 마커가 아니라 **블록 정의(blocks[name].entities)를 전개**해 표시함.
+- **구현**: INSERT 발생 시 블록 내부 엔티티(LINE, LWPOLYLINE, CIRCLE, ARC, SPLINE, POINT 등)에 **위치·축척·회전** 변환을 적용한 뒤, 기존과 동일한 GeoJSON(LineString/Polygon/Point)으로 변환해 Data 레이어에 추가. 변환 순서는 ADMAP과 동일(기준점 보정 → scale → rotate → insert 위치).
+- 블록이 없거나 엔티티가 없으면 기존처럼 삽입 위치만 Point로 표시.
+
 ## 구현 노트: DXF 두께 표시
 
 - **두께 판별**: DXF `constantWidth`(그룹코드 43) > 0 또는 `lineweight`(370) > 0 이면 "두꺼운 선"으로 간주.

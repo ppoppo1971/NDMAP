@@ -147,10 +147,18 @@
 
     for (var i = 0; i < entities.length; i++) {
       var entity = entities[i];
-      var feature = entityToFeature(entity, dxfData);
-      if (feature) {
-        feature.id = i;
-        features.push(feature);
+      if (entity.type === 'INSERT') {
+        var expanded = insertToFeatures(entity, dxfData);
+        for (var j = 0; j < expanded.length; j++) {
+          expanded[j].id = 'insert_' + i + '_' + j;
+          features.push(expanded[j]);
+        }
+      } else {
+        var feature = entityToFeature(entity, dxfData);
+        if (feature) {
+          feature.id = i;
+          features.push(feature);
+        }
       }
     }
 
@@ -326,6 +334,130 @@
       geometry: { type: 'LineString', coordinates: coords },
       properties: { layer: entity.layer || '', strokeColor: strokeColor, thick: !!thick }
     };
+  }
+
+  /**
+   * 블록 내부 점(블록 좌표)을 INSERT 변환 후 세계 좌표로 옮긴 뒤 [lng, lat] 반환
+   * ADMAP 변환 순서: 기준점 보정 → scale → rotate → insert 위치
+   */
+  function blockPointToLngLat(bx, by, insertPos, blockBase, xScale, yScale, rotation) {
+    var dx = (bx - blockBase.x) * xScale;
+    var dy = (by - blockBase.y) * yScale;
+    var rx = dx * Math.cos(rotation) - dy * Math.sin(rotation);
+    var ry = dx * Math.sin(rotation) + dy * Math.cos(rotation);
+    var wx = rx + insertPos.x;
+    var wy = ry + insertPos.y;
+    return pt(wx, wy);
+  }
+
+  /** 블록 내부 엔티티 하나를 변환된 좌표로 GeoJSON Feature로 만듦 (tf(bx,by) → [lng,lat]) */
+  function blockEntityToFeature(blockEntity, tf, dxfData) {
+    if (!blockEntity || !blockEntity.type) return null;
+    var strokeColor = getEntityColor(blockEntity, dxfData);
+    var thick = isThickLine(blockEntity);
+    var c1, c2, coords, geom, closed;
+    switch (blockEntity.type) {
+      case 'LINE':
+        c1 = blockEntity.startPoint && tf(blockEntity.startPoint.x, blockEntity.startPoint.y);
+        c2 = blockEntity.endPoint && tf(blockEntity.endPoint.x, blockEntity.endPoint.y);
+        if (!c1 || !c2) return null;
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: [c1, c2] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+      case 'LWPOLYLINE':
+      case 'POLYLINE':
+        if (!blockEntity.vertices || blockEntity.vertices.length < 2) return null;
+        coords = [];
+        for (var v = 0; v < blockEntity.vertices.length; v++) {
+          var ll = tf(blockEntity.vertices[v].x, blockEntity.vertices[v].y);
+          if (ll) coords.push(ll);
+        }
+        if (coords.length < 2) return null;
+        closed = blockEntity.closed || blockEntity.shape;
+        if (closed && coords.length >= 4) {
+          coords.push(coords[0]);
+          return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick } };
+        }
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+      case 'CIRCLE':
+        var cx = blockEntity.center && blockEntity.center.x;
+        var cy = blockEntity.center && blockEntity.center.y;
+        var r = blockEntity.radius;
+        if (typeof cx !== 'number' || typeof cy !== 'number' || typeof r !== 'number' || r <= 0) return null;
+        coords = [];
+        for (var i = 0; i <= 32; i++) {
+          var a = (i / 32) * 2 * Math.PI;
+          var ll = tf(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          if (ll) coords.push(ll);
+        }
+        if (coords.length < 4) return null;
+        return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick } };
+      case 'ARC':
+        cx = blockEntity.center && blockEntity.center.x;
+        cy = blockEntity.center && blockEntity.center.y;
+        r = blockEntity.radius;
+        var startAngle = blockEntity.startAngle != null ? blockEntity.startAngle * Math.PI / 180 : 0;
+        var endAngle = blockEntity.endAngle != null ? blockEntity.endAngle * Math.PI / 180 : 2 * Math.PI;
+        if (typeof cx !== 'number' || typeof cy !== 'number' || typeof r !== 'number' || r <= 0) return null;
+        var segs = Math.max(8, Math.min(64, Math.ceil(Math.abs(endAngle - startAngle) / (Math.PI / 16))));
+        coords = [];
+        for (var j = 0; j <= segs; j++) {
+          var t = j / segs;
+          a = startAngle + t * (endAngle - startAngle);
+          ll = tf(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          if (ll) coords.push(ll);
+        }
+        if (coords.length < 2) return null;
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+      case 'SPLINE':
+        if (!blockEntity.controlPoints || blockEntity.controlPoints.length < 2) return null;
+        coords = [];
+        for (var k = 0; k < blockEntity.controlPoints.length; k++) {
+          ll = tf(blockEntity.controlPoints[k].x, blockEntity.controlPoints[k].y);
+          if (ll) coords.push(ll);
+        }
+        if (coords.length < 2) return null;
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
+      case 'POINT':
+        if (!blockEntity.position) return null;
+        c1 = tf(blockEntity.position.x, blockEntity.position.y);
+        if (!c1) return null;
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
+      case 'TEXT':
+      case 'MTEXT':
+      case 'INSERT':
+        if (!blockEntity.position) return null;
+        c1 = tf(blockEntity.position.x, blockEntity.position.y);
+        if (!c1) return null;
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
+      default:
+        return null;
+    }
+  }
+
+  /** INSERT 엔티티: 블록이 있으면 블록 내부 도형을 전개해 여러 Feature로 반환, 없으면 위치만 Point 한 개 */
+  function insertToFeatures(entity, dxfData) {
+    if (!entity.position || !entity.name) {
+      var single = positionToFeature(entity, getEntityColor(entity, dxfData));
+      return single ? [single] : [];
+    }
+    var block = dxfData && dxfData.blocks && dxfData.blocks[entity.name];
+    if (!block || !block.entities || block.entities.length === 0) {
+      var fe = positionToFeature(entity, getEntityColor(entity, dxfData));
+      return fe ? [fe] : [];
+    }
+    var insertPos = entity.position;
+    var blockBase = (block.position != null) ? { x: block.position.x, y: block.position.y } : { x: 0, y: 0 };
+    var xScale = entity.xScale != null ? entity.xScale : 1;
+    var yScale = entity.yScale != null ? entity.yScale : 1;
+    var rotation = entity.rotation != null ? entity.rotation : 0;
+    function tf(bx, by) {
+      return blockPointToLngLat(bx, by, insertPos, blockBase, xScale, yScale, rotation);
+    }
+    var features = [];
+    for (var e = 0; e < block.entities.length; e++) {
+      var f = blockEntityToFeature(block.entities[e], tf, dxfData);
+      if (f) features.push(f);
+    }
+    return features;
   }
 
   global.DxfToGeoJSON = {
