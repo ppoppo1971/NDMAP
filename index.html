@@ -134,6 +134,7 @@
     .close-btn { font-size: 24px; color: #999; cursor: pointer; line-height: 1; }
     .btn-delete { background: #FF3B30; color: white; }
     .btn-delete:active { background: #C60B00; }
+    .info-box { background: #E3F2FD; padding: 12px; border-radius: 8px; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -183,6 +184,7 @@
     <button class="slide-menu-item" id="menu-back-to-list">목록</button>
     <button class="slide-menu-item" id="menu-fit-view">전체보기</button>
     <button class="slide-menu-item" id="menu-map-type">배경 지도</button>
+    <button class="slide-menu-item" id="menu-image-size">용량조정</button>
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
   </div>
   <div class="menu-overlay" id="menu-overlay"></div>
@@ -213,6 +215,35 @@
       <div style="display:flex; gap:10px;">
         <button type="button" class="btn" id="photo-modal-save">저장</button>
         <button type="button" class="btn btn-delete" id="photo-modal-delete">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 용량 조정 모달 (ADMAP 참조) -->
+  <div class="modal" id="image-size-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📏 사진 용량 조정</h3>
+        <span class="close-btn" id="image-size-close">&times;</span>
+      </div>
+      <div class="info-box" style="margin-bottom:16px;">
+        <strong>현재 설정:</strong> <span id="current-size-display">2MB</span>
+        <br><br>
+        사진을 추가할 때 선택한 용량으로 자동 압축됩니다.
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button type="button" class="btn size-opt" id="size-500kb" data-size="500KB" style="background:#007AFF; text-align:left; padding:12px;">
+          <strong>500KB</strong> (권장)<br><span style="font-size:12px; opacity:0.9;">빠른 업로드, 적은 저장 공간</span>
+        </button>
+        <button type="button" class="btn size-opt" id="size-1mb" data-size="1MB" style="background:#34C759; text-align:left; padding:12px;">
+          <strong>1MB</strong><br><span style="font-size:12px; opacity:0.9;">더 나은 화질, 중간 용량</span>
+        </button>
+        <button type="button" class="btn size-opt" id="size-2mb" data-size="2MB" style="background:#5856D6; text-align:left; padding:12px;">
+          <strong>2MB</strong><br><span style="font-size:12px; opacity:0.9;">고화질, 큰 용량</span>
+        </button>
+        <button type="button" class="btn size-opt" id="size-original" data-size="original" style="background:#FF9500; text-align:left; padding:12px;">
+          <strong>원본</strong><br><span style="font-size:12px; opacity:0.9;">최고 화질, 압축 없음</span>
+        </button>
       </div>
     </div>
   </div>

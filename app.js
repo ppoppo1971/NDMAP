@@ -32,6 +32,7 @@ var menuOverlay = null;
 var mapTypeSelector = null;
 var editingPhotoId = null;
 var editingTextId = null;
+var imageSizeSetting = typeof localStorage !== 'undefined' ? (localStorage.getItem('dmap:imageSize') || '2MB') : '2MB';
 
 /**
  * Google Maps API 로드 후 콜백
@@ -79,6 +80,8 @@ function initMap() {
   bindContextMenu();
   bindPhotoModal();
   bindTextModal();
+  bindImageSizeModal();
+  bindContextMenuCloseOnMap();
   bindUI();
   console.log('new_dmap: 지도 초기화 완료 (배경 없음 기본)');
 }
@@ -118,6 +121,11 @@ function bindUI() {
     if (mapTypeSelector) {
       mapTypeSelector.classList.toggle('show');
     }
+  });
+  document.getElementById('menu-image-size').addEventListener('click', function () {
+    slideMenu.classList.remove('active');
+    menuOverlay.classList.remove('active');
+    showImageSizeModal();
   });
   document.getElementById('menu-export').addEventListener('click', function () {
     slideMenu.classList.remove('active');
@@ -283,7 +291,10 @@ function fitDxfToView() {
 
 function updateFileNameDisplay() {
   var el = document.getElementById('file-name-text');
-  if (el) el.textContent = dxfFileName || '도면';
+  if (el) {
+    var sizeText = imageSizeSetting === 'original' ? '원본' : imageSizeSetting;
+    el.textContent = (dxfFileName || '도면') + ' [' + sizeText + ']';
+  }
 }
 
 function setMapType(type) {
@@ -297,6 +308,56 @@ function setMapType(type) {
     map.setOptions({ styles: [] });
     map.setMapTypeId(currentMapType);
   }
+}
+
+function getImageTargetSize() {
+  switch (imageSizeSetting) {
+    case '500KB': return 500 * 1024;
+    case '1MB': return 1024 * 1024;
+    case '2MB': return 2 * 1024 * 1024;
+    case 'original': return null;
+    default: return 2 * 1024 * 1024;
+  }
+}
+
+function showImageSizeModal() {
+  var modal = document.getElementById('image-size-modal');
+  var currentDisplay = document.getElementById('current-size-display');
+  if (currentDisplay) currentDisplay.textContent = imageSizeSetting;
+  var opts = document.querySelectorAll('.size-opt');
+  opts.forEach(function (btn) {
+    var size = btn.getAttribute('data-size');
+    btn.style.opacity = size === imageSizeSetting ? '1' : '0.7';
+  });
+  if (modal) modal.classList.add('active');
+}
+
+function closeImageSizeModal() {
+  var modal = document.getElementById('image-size-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function setImageSize(size) {
+  if (!['500KB', '1MB', '2MB', 'original'].includes(size)) return;
+  imageSizeSetting = size;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('dmap:imageSize', size);
+  closeImageSizeModal();
+  updateFileNameDisplay();
+}
+
+function bindImageSizeModal() {
+  var closeBtn = document.getElementById('image-size-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeImageSizeModal);
+  ['size-500kb', 'size-1mb', 'size-2mb', 'size-original'].forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', function () {
+      setImageSize(btn.getAttribute('data-size'));
+    });
+  });
+  var modal = document.getElementById('image-size-modal');
+  if (modal) modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeImageSizeModal();
+  });
 }
 
 function latLngToDxf(latLng) {
@@ -398,6 +459,31 @@ function drawTextMarkers() {
   });
 }
 
+function hideContextMenu() {
+  if (contextMenuEl) contextMenuEl.classList.remove('active');
+}
+
+function bindContextMenuCloseOnMap() {
+  if (!map || !contextMenuEl) return;
+  map.addListener('click', function () {
+    if (contextMenuEl.classList.contains('active')) hideContextMenu();
+  });
+  map.addListener('dragstart', function () {
+    hideContextMenu();
+  });
+  map.addListener('zoom_changed', function () {
+    hideContextMenu();
+  });
+  document.addEventListener('touchstart', function (e) {
+    if (!contextMenuEl.classList.contains('active')) return;
+    if (e.target && !contextMenuEl.contains(e.target)) hideContextMenu();
+  }, { passive: true });
+  document.addEventListener('mousedown', function (e) {
+    if (!contextMenuEl.classList.contains('active')) return;
+    if (e.target && !contextMenuEl.contains(e.target)) hideContextMenu();
+  });
+}
+
 function bindMapLongPress() {
   if (!map || !contextMenuEl) return;
   var startLatLng = null;
@@ -459,23 +545,83 @@ function bindContextMenu() {
   });
 }
 
+function compressImage(dataUrl, targetSize) {
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () {
+      var maxDim = targetSize <= 500 * 1024 ? 800 : targetSize <= 1024 * 1024 ? 1200 : 1600;
+      var w = img.width;
+      var h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.floor((h / w) * maxDim);
+          w = maxDim;
+        } else {
+          w = Math.floor((w / h) * maxDim);
+          h = maxDim;
+        }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var quality = 0.85;
+      var data = canvas.toDataURL('image/jpeg', quality);
+      var size = Math.floor((data.length - 22) * 0.75);
+      var minQ = 0.3;
+      var maxQ = 0.95;
+      for (var i = 0; i < 3 && Math.abs(size - targetSize) / targetSize > 0.15; i++) {
+        if (size > targetSize) {
+          maxQ = quality;
+          quality = (minQ + quality) / 2;
+        } else {
+          minQ = quality;
+          quality = (quality + maxQ) / 2;
+        }
+        quality = Math.max(0.3, Math.min(0.95, quality));
+        data = canvas.toDataURL('image/jpeg', quality);
+        size = Math.floor((data.length - 22) * 0.75);
+      }
+      ctx = null;
+      canvas.width = 0;
+      canvas.height = 0;
+      resolve(data);
+    };
+    img.onerror = function () { reject(new Error('이미지 로드 실패')); };
+    img.src = dataUrl;
+  });
+}
+
 function addPhotoAtPosition(xy, file) {
   if (!dxfFileFullName || !window.localStore) return;
   var id = 'photo-' + Date.now();
+  var targetSize = getImageTargetSize();
   var reader = new FileReader();
   reader.onload = function () {
     var dataUrl = reader.result;
-    var blob = window.localStore.dataUrlToBlob(dataUrl);
-    var photo = {
-      id: id, x: xy.x, y: xy.y, width: 200, height: 200,
-      blob: blob, memo: '', fileName: file.name || 'photo.jpg',
-      createdAt: new Date().toISOString()
-    };
-    photos.push(photo);
-    window.localStore.savePhoto(dxfFileFullName, photo).then(function () {
-      drawPhotoMarkers();
-      pendingAddPosition = null;
-    });
+    function finish(useDataUrl) {
+      var blob = window.localStore.dataUrlToBlob(useDataUrl);
+      var photo = {
+        id: id, x: xy.x, y: xy.y, width: 200, height: 200,
+        blob: blob, memo: '', fileName: file.name || 'photo.jpg',
+        createdAt: new Date().toISOString()
+      };
+      photos.push(photo);
+      window.localStore.savePhoto(dxfFileFullName, photo).then(function () {
+        drawPhotoMarkers();
+        pendingAddPosition = null;
+      });
+    }
+    if (targetSize != null) {
+      compressImage(dataUrl, targetSize).then(function (compressed) {
+        finish(compressed);
+      }).catch(function () {
+        finish(dataUrl);
+      });
+    } else {
+      finish(dataUrl);
+    }
   };
   reader.readAsDataURL(file);
 }
