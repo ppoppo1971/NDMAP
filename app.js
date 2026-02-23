@@ -204,7 +204,7 @@ function bindScaleDisplay() {
   google.maps.event.addListener(map, 'idle', updateScaleDisplay);
   google.maps.event.addListener(map, 'bounds_changed', function () {
     if (scaleDisplayTimeout) clearTimeout(scaleDisplayTimeout);
-    scaleDisplayTimeout = setTimeout(updateScaleDisplay, 100);
+    scaleDisplayTimeout = setTimeout(updateScaleDisplay, 180);
   });
   updateScaleDisplay();
 }
@@ -293,6 +293,7 @@ function showExportMethodModal() {
 function hideExportMethodModal() {
   var modal = document.getElementById('export-method-modal');
   if (modal) modal.classList.remove('active');
+  exportInfo = null;
 }
 
 function exportAsZip() {
@@ -1034,6 +1035,9 @@ function addPhotoAtPosition(xy, file) {
       window.localStore.savePhoto(dxfFileFullName, photo).then(function () {
         drawPhotoMarkers();
         pendingAddPosition = null;
+      }).catch(function (err) {
+        console.error('사진 저장 실패:', err);
+        alert('사진 저장에 실패했습니다. 다시 시도해 주세요.');
       });
     }
     if (targetSize != null) {
@@ -1057,6 +1061,9 @@ function addTextAtPosition(xy, textStr) {
   window.localStore.saveProject(dxfFileFullName, { texts: texts, lastModified: new Date().toISOString() }).then(function () {
     drawTextMarkers();
     pendingAddPosition = null;
+  }).catch(function (err) {
+    console.error('텍스트 저장 실패:', err);
+    alert('텍스트 저장에 실패했습니다. 다시 시도해 주세요.');
   });
 }
 
@@ -1077,7 +1084,10 @@ function showPhotoModal(photoId) {
 }
 
 function hidePhotoModal() {
-  document.getElementById('photo-modal').classList.remove('active');
+  var modal = document.getElementById('photo-modal');
+  var img = document.getElementById('photo-modal-img');
+  if (modal) modal.classList.remove('active');
+  if (img) img.src = '';
   editingPhotoId = null;
 }
 
@@ -1094,6 +1104,9 @@ function bindPhotoModal() {
       var p = photos.filter(function (x) { return x.id === editingPhotoId; })[0];
       if (p) p.memo = memo.value;
       hidePhotoModal();
+    }).catch(function (err) {
+      console.error('메모 저장 실패:', err);
+      alert('메모 저장에 실패했습니다. 다시 시도해 주세요.');
     });
   });
   if (delBtn) delBtn.addEventListener('click', function () {
@@ -1149,6 +1162,9 @@ function bindTextModal() {
         window.localStore.saveProject(dxfFileFullName, { texts: texts, lastModified: new Date().toISOString() }).then(function () {
           drawTextMarkers();
           hideTextModal();
+        }).catch(function (err) {
+          console.error('텍스트 저장 실패:', err);
+          alert('텍스트 저장에 실패했습니다. 다시 시도해 주세요.');
         });
       }
     } else if (pendingAddPosition && window.localStore) {
@@ -1163,6 +1179,9 @@ function bindTextModal() {
     window.localStore.saveProject(dxfFileFullName, { texts: texts, lastModified: new Date().toISOString() }).then(function () {
       drawTextMarkers();
       hideTextModal();
+    }).catch(function (err) {
+      console.error('텍스트 삭제 후 저장 실패:', err);
+      alert('저장에 실패했습니다. 다시 시도해 주세요.');
     });
   });
 }
