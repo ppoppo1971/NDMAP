@@ -234,9 +234,8 @@
 
   <script src="config.js"></script>
   <script src="local-storage.js"></script>
-  <!-- DXF 파서: 로컬 libs/dxf-parser.min.js 사용 시 아래 주석 해제. 없으면 CDN 사용 -->
-  <!-- <script src="libs/dxf-parser.min.js"></script> -->
-  <script src="https://unpkg.com/dxf-parser@1.2.1/dist/dxf-parser.min.js"></script>
+  <!-- DXF 파서: 로컬 libs (오프라인용). 없으면 npm run copy-libs 또는 ADMAP-main/libs에서 복사 -->
+  <script src="libs/dxf-parser.min.js"></script>
   <script src="dxf-to-geojson.js"></script>
   <script src="app.js"></script>
   <script>
