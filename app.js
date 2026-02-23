@@ -483,36 +483,87 @@ function bindContextMenuCloseOnMap() {
 
 function bindMapLongPress() {
   if (!map || !contextMenuEl) return;
-  var startLatLng = null;
   var mapEl = document.getElementById('map');
+  var moveThreshold = 15;
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var pendingLongPress = null;
   function cancelLongPress() {
     if (longPressTimer) {
       clearTimeout(longPressTimer);
       longPressTimer = null;
     }
-    startLatLng = null;
+    pendingLongPress = null;
   }
-  map.addListener('mousedown', function (e) {
-    startLatLng = e.latLng;
-    longPressTimer = setTimeout(function () {
-      longPressTimer = null;
-      if (!startLatLng) return;
-      var xy = latLngToDxf(startLatLng);
-      if (xy) {
-        pendingAddPosition = { x: xy.x, y: xy.y };
-        contextMenuEl.classList.add('active');
-        contextMenuEl.style.left = (e.domEvent && e.domEvent.clientX) ? e.domEvent.clientX + 'px' : '50%';
-        contextMenuEl.style.top = (e.domEvent && e.domEvent.clientY) ? e.domEvent.clientY + 'px' : '50%';
-      }
-      startLatLng = null;
-    }, longPressDuration);
-  });
-  map.addListener('mouseup', cancelLongPress);
-  map.addListener('mousemove', cancelLongPress);
+  function showMenuAt(clientX, clientY, latLng) {
+    if (!latLng) return;
+    var xy = latLngToDxf(latLng);
+    if (xy) {
+      pendingAddPosition = { x: xy.x, y: xy.y };
+      contextMenuEl.classList.add('active');
+      contextMenuEl.style.left = (clientX != null ? clientX : window.innerWidth / 2) + 'px';
+      contextMenuEl.style.top = (clientY != null ? clientY : window.innerHeight / 2) + 'px';
+    }
+  }
+  function latLngFromClient(clientX, clientY) {
+    if (!mapEl || !map) return null;
+    var bounds = map.getBounds();
+    if (!bounds) return null;
+    var proj = map.getProjection();
+    if (!proj) return null;
+    var rect = mapEl.getBoundingClientRect();
+    var fx = (clientX - rect.left) / rect.width;
+    var fy = (clientY - rect.top) / rect.height;
+    var topRight = proj.fromLatLngToPoint(bounds.getNorthEast());
+    var bottomLeft = proj.fromLatLngToPoint(bounds.getSouthWest());
+    var point = new google.maps.Point(
+      bottomLeft.x + fx * (topRight.x - bottomLeft.x),
+      topRight.y + fy * (bottomLeft.y - topRight.y)
+    );
+    return proj.fromPointToLatLng(point);
+  }
+  var isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window;
+  if (!isTouchDevice) {
+    map.addListener('mousedown', function (e) {
+      var cX = e.domEvent && e.domEvent.clientX;
+      var cY = e.domEvent && e.domEvent.clientY;
+      pendingLongPress = { clientX: cX, clientY: cY, latLng: e.latLng };
+      longPressTimer = setTimeout(function () {
+        longPressTimer = null;
+        if (!pendingLongPress) return;
+        showMenuAt(pendingLongPress.clientX, pendingLongPress.clientY, pendingLongPress.latLng);
+        pendingLongPress = null;
+      }, longPressDuration);
+    });
+    map.addListener('mouseup', cancelLongPress);
+    map.addListener('mousemove', cancelLongPress);
+  }
   if (mapEl) {
-    mapEl.addEventListener('touchmove', cancelLongPress, { passive: true });
     mapEl.addEventListener('touchstart', function (e) {
-      if (e.touches && e.touches.length >= 2) cancelLongPress();
+      if (e.touches && e.touches.length >= 2) {
+        cancelLongPress();
+        return;
+      }
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        pendingLongPress = { clientX: touchStartX, clientY: touchStartY, latLng: null };
+        longPressTimer = setTimeout(function () {
+          longPressTimer = null;
+          if (!pendingLongPress) return;
+          var latLng = latLngFromClient(pendingLongPress.clientX, pendingLongPress.clientY);
+          if (latLng) {
+            showMenuAt(pendingLongPress.clientX, pendingLongPress.clientY, latLng);
+          }
+          pendingLongPress = null;
+        }, longPressDuration);
+      }
+    }, { passive: true });
+    mapEl.addEventListener('touchmove', function (e) {
+      if (!longPressTimer || !e.touches.length) return;
+      var dx = e.touches[0].clientX - touchStartX;
+      var dy = e.touches[0].clientY - touchStartY;
+      if (dx * dx + dy * dy > moveThreshold * moveThreshold) cancelLongPress();
     }, { passive: true });
     mapEl.addEventListener('touchend', function (e) {
       if (e.touches && e.touches.length >= 1) return;
