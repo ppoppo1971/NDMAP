@@ -465,9 +465,6 @@ function hideContextMenu() {
 
 function bindContextMenuCloseOnMap() {
   if (!map || !contextMenuEl) return;
-  map.addListener('click', function () {
-    if (contextMenuEl.classList.contains('active')) hideContextMenu();
-  });
   map.addListener('dragstart', function () {
     hideContextMenu();
   });
@@ -487,6 +484,14 @@ function bindContextMenuCloseOnMap() {
 function bindMapLongPress() {
   if (!map || !contextMenuEl) return;
   var startLatLng = null;
+  var mapEl = document.getElementById('map');
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    startLatLng = null;
+  }
   map.addListener('mousedown', function (e) {
     startLatLng = e.latLng;
     longPressTimer = setTimeout(function () {
@@ -502,19 +507,18 @@ function bindMapLongPress() {
       startLatLng = null;
     }, longPressDuration);
   });
-  map.addListener('mouseup', function () {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-    startLatLng = null;
-  });
-  map.addListener('mousemove', function () {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  });
+  map.addListener('mouseup', cancelLongPress);
+  map.addListener('mousemove', cancelLongPress);
+  if (mapEl) {
+    mapEl.addEventListener('touchmove', cancelLongPress, { passive: true });
+    mapEl.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches.length >= 2) cancelLongPress();
+    }, { passive: true });
+    mapEl.addEventListener('touchend', function (e) {
+      if (e.touches && e.touches.length >= 1) return;
+      if (longPressTimer) cancelLongPress();
+    }, { passive: true });
+  }
 }
 
 function bindContextMenu() {
