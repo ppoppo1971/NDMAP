@@ -1,0 +1,12 @@
+{
+  "name": "new-dmap",
+  "version": "0.1.0",
+  "description": "지도 엔진 기반 DXF 도면 뷰어 (ADMAP 기능 유지, VMAP 참조)",
+  "scripts": {
+    "setup": "npm install && npm run copy-libs",
+    "copy-libs": "node copy-libs.js"
+  },
+  "dependencies": {
+    "dxf-parser": "^1.2.1"
+  }
+}
