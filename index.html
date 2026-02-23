@@ -74,6 +74,10 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;
     }
     .zoom-btn:active { background: #007AFF; color: white; }
+    .scale-display {
+      position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white;
+      padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 12;
+    }
     .slide-menu {
       position: fixed; top: 0; right: -300px; width: 250px; height: 100vh; background: white;
       box-shadow: -4px 0 12px rgba(0,0,0,0.3); z-index: 1001; transition: right 0.3s ease-out; padding-top: 80px;
@@ -166,6 +170,7 @@
       <button class="zoom-btn" id="zoom-in" type="button">+</button>
       <button class="zoom-btn" id="zoom-out" type="button">−</button>
     </div>
+    <div class="scale-display" id="scale-display">—</div>
   </div>
 
   <!-- 배경 지도 선택 -->
@@ -202,9 +207,6 @@
           <strong>📷 개별 다운로드</strong><br>
           <span style="font-size:12px; opacity:0.8;">파일을 하나씩 순차 다운로드 (대용량·안정성 권장)</span>
         </button>
-      </div>
-      <div style="margin-top:15px;">
-        <button type="button" class="btn-cancel" id="export-method-cancel">취소</button>
       </div>
     </div>
   </div>

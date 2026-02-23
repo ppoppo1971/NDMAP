@@ -86,6 +86,8 @@ function initMap() {
   bindImageSizeModal();
   bindContextMenuCloseOnMap();
   bindUI();
+  bindScaleDisplay();
+  bindDoubleTapZoom();
   console.log('new_dmap: 지도 초기화 완료 (배경 없음 기본)');
 }
 
@@ -138,11 +140,9 @@ function bindUI() {
   var exportMethodModal = document.getElementById('export-method-modal');
   var exportInfoBox = document.getElementById('export-info-box');
   var exportMethodClose = document.getElementById('export-method-close');
-  var exportMethodCancel = document.getElementById('export-method-cancel');
   var exportZipBtn = document.getElementById('export-zip-btn');
   var exportIndividualBtn = document.getElementById('export-individual-btn');
   if (exportMethodClose) exportMethodClose.addEventListener('click', hideExportMethodModal);
-  if (exportMethodCancel) exportMethodCancel.addEventListener('click', hideExportMethodModal);
   if (exportZipBtn) exportZipBtn.addEventListener('click', exportAsZip);
   if (exportIndividualBtn) exportIndividualBtn.addEventListener('click', exportAsIndividual);
   if (exportMethodModal) {
@@ -170,6 +170,94 @@ function bindUI() {
       });
     });
   }
+}
+
+/**
+ * ADMAP과 동일: 현재 화면 가로 폭을 미터 단위로 표시.
+ * 거리 계산: 지도 bounds(NE, SW)의 경도 차이(도) × 해당 위도에서 1도 경도당 미터(111320×cos(위도)).
+ * 위도 1도 ≈ 111320m, 경도 1도 ≈ 111320×cos(위도)m 이므로, 가로 폭(m) = (NE.lng - SW.lng) × 111320 × cos(중심위도).
+ */
+function updateScaleDisplay() {
+  var el = document.getElementById('scale-display');
+  if (!el || !map) return;
+  var bounds = map.getBounds();
+  if (!bounds) { el.textContent = '—'; return; }
+  var ne = bounds.getNorthEast();
+  var sw = bounds.getSouthWest();
+  var centerLat = (ne.lat() + sw.lat()) / 2;
+  var latRad = (centerLat * Math.PI) / 180;
+  var metersPerDegLng = 111320 * Math.cos(latRad);
+  var widthMeters = (ne.lng() - sw.lng()) * metersPerDegLng;
+  if (widthMeters >= 1000) {
+    el.textContent = (widthMeters / 1000).toFixed(1) + 'km';
+  } else if (widthMeters >= 10) {
+    el.textContent = widthMeters.toFixed(0) + 'm';
+  } else if (widthMeters >= 1) {
+    el.textContent = widthMeters.toFixed(1) + 'm';
+  } else {
+    el.textContent = (widthMeters * 100).toFixed(0) + 'cm';
+  }
+}
+
+function bindScaleDisplay() {
+  if (!map) return;
+  google.maps.event.addListener(map, 'idle', updateScaleDisplay);
+  google.maps.event.addListener(map, 'bounds_changed', function () {
+    if (scaleDisplayTimeout) clearTimeout(scaleDisplayTimeout);
+    scaleDisplayTimeout = setTimeout(updateScaleDisplay, 100);
+  });
+  updateScaleDisplay();
+}
+var scaleDisplayTimeout = null;
+
+/** 더블탭 시 해당 위치를 중심으로 화면 가로 폭 50m가 되도록 확대/축소 (ADMAP defaultZoomRange 50m) */
+var lastTapTime = 0;
+var lastTapLatLng = null;
+var doubleTapDelayMs = 300;
+var doubleTapMaxDistM = 8;
+
+function bindDoubleTapZoom() {
+  if (!map) return;
+  google.maps.event.addListener(map, 'click', function (e) {
+    var latLng = e.latLng;
+    if (!latLng) return;
+    var now = Date.now();
+    var isDoubleTap = lastTapTime && (now - lastTapTime) < doubleTapDelayMs && lastTapLatLng &&
+      getLatLngDistanceM(lastTapLatLng, latLng) < doubleTapMaxDistM;
+    if (isDoubleTap) {
+      lastTapTime = 0;
+      lastTapLatLng = null;
+      zoomMapTo50mAt(latLng);
+      return;
+    }
+    lastTapTime = now;
+    lastTapLatLng = latLng;
+  });
+}
+
+function getLatLngDistanceM(a, b) {
+  var lat1 = (a.lat && a.lat()) ? a.lat() : a.lat;
+  var lng1 = (a.lng && a.lng()) ? a.lng() : a.lng;
+  var lat2 = (b.lat && b.lat()) ? b.lat() : b.lat;
+  var lng2 = (b.lng && b.lng()) ? b.lng() : b.lng;
+  var latRad = (lat1 * Math.PI) / 180;
+  var dy = (lat2 - lat1) * 111320;
+  var dx = (lng2 - lng1) * 111320 * Math.cos(latRad);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function zoomMapTo50mAt(latLng) {
+  if (!map || !latLng) return;
+  var lat = (latLng.lat && latLng.lat()) ? latLng.lat() : latLng.lat;
+  var lng = (latLng.lng && latLng.lng()) ? latLng.lng() : latLng.lng;
+  var latRad = (lat * Math.PI) / 180;
+  var lngSpan = 50 / (111320 * Math.cos(latRad));
+  var half = lngSpan / 2;
+  var bounds = new google.maps.LatLngBounds(
+    new google.maps.LatLng(lat - 1e-5, lng - half),
+    new google.maps.LatLng(lat + 1e-5, lng + half)
+  );
+  map.fitBounds(bounds);
 }
 
 function showLoading(show) {
