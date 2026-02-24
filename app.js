@@ -199,6 +199,8 @@ function updateScaleDisplay() {
   var latRad = (centerLat * Math.PI) / 180;
   var metersPerDegLng = 111320 * Math.cos(latRad);
   var widthMeters = (ne.lng() - sw.lng()) * metersPerDegLng;
+  // 전역 축척 캐시 (Point 아이콘 크기 조절용)
+  currentScaleWidthMeters = widthMeters;
   if (widthMeters >= 1000) {
     el.textContent = (widthMeters / 1000).toFixed(1) + 'km';
   } else if (widthMeters >= 10) {
@@ -220,6 +222,8 @@ function bindScaleDisplay() {
   updateScaleDisplay();
 }
 var scaleDisplayTimeout = null;
+// 현재 화면 가로 폭(m) 캐시 (아이콘 크기 조건 분기용)
+var currentScaleWidthMeters = null;
 
 /** 더블탭 시 해당 위치를 중심으로 화면 가로 폭 50m가 되도록 확대/축소 (ADMAP defaultZoomRange 50m) */
 var lastTapTime = 0;
@@ -486,12 +490,22 @@ function loadDxfFile(file) {
 
 var dxfTextGreenCircleIcon = null;
 var dxfTextGrayCircleIcon = null;
+var dxfTextGreenCircleIconSmall = null;
+var dxfTextGrayCircleIconSmall = null;
 
+// 기본 아이콘 크기(픽셀)와 축척 50m 이하일 때 사용할 작은 크기
 var dxfTextIconSizePx = 20;
+var dxfTextIconSizePxSmall = 2; // 1/10 크기
+
+function createDxfTextCircleSvg(fillColor) {
+  // 투명도를 높여서 지도 위에서 덜 튀도록 fill-opacity 적용
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+    '<circle cx="12" cy="12" r="10" fill="' + fillColor + '" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
+}
 
 function getDxfTextGreenCircleIcon() {
   if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00C853" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var svg = createDxfTextCircleSvg('#00C853');
   var s = dxfTextIconSizePx;
   dxfTextGreenCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -501,9 +515,21 @@ function getDxfTextGreenCircleIcon() {
   return dxfTextGreenCircleIcon;
 }
 
+function getDxfTextGreenCircleIconSmall() {
+  if (dxfTextGreenCircleIconSmall) return dxfTextGreenCircleIconSmall;
+  var svg = createDxfTextCircleSvg('#00C853');
+  var s = dxfTextIconSizePxSmall;
+  dxfTextGreenCircleIconSmall = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(s, s),
+    anchor: new google.maps.Point(s / 2, s / 2)
+  };
+  return dxfTextGreenCircleIconSmall;
+}
+
 function getDxfTextGrayCircleIcon() {
   if (dxfTextGrayCircleIcon) return dxfTextGrayCircleIcon;
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888888" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var svg = createDxfTextCircleSvg('#888888');
   var s = dxfTextIconSizePx;
   dxfTextGrayCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -511,6 +537,18 @@ function getDxfTextGrayCircleIcon() {
     anchor: new google.maps.Point(s / 2, s / 2)
   };
   return dxfTextGrayCircleIcon;
+}
+
+function getDxfTextGrayCircleIconSmall() {
+  if (dxfTextGrayCircleIconSmall) return dxfTextGrayCircleIconSmall;
+  var svg = createDxfTextCircleSvg('#888888');
+  var s = dxfTextIconSizePxSmall;
+  dxfTextGrayCircleIconSmall = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(s, s),
+    anchor: new google.maps.Point(s / 2, s / 2)
+  };
+  return dxfTextGrayCircleIconSmall;
 }
 
 function applyDxfToMap() {
@@ -524,14 +562,15 @@ function applyDxfToMap() {
       var geomType = geom && geom.getType ? geom.getType() : '';
       if (geomType === 'Point') {
         var text = feature.getProperty('text');
+        var useSmallIcon = currentScaleWidthMeters != null && currentScaleWidthMeters <= 50;
         if (text != null && String(text).trim() !== '') {
           return {
-            icon: getDxfTextGreenCircleIcon(),
+            icon: useSmallIcon ? getDxfTextGreenCircleIconSmall() : getDxfTextGreenCircleIcon(),
             clickable: true
           };
         }
         return {
-          icon: getDxfTextGrayCircleIcon(),
+          icon: useSmallIcon ? getDxfTextGrayCircleIconSmall() : getDxfTextGrayCircleIcon(),
           clickable: false
         };
       }
