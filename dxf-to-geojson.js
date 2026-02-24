@@ -147,7 +147,7 @@
 
     for (var i = 0; i < entities.length; i++) {
       var entity = entities[i];
-      if (entity.type === 'INSERT') {
+      if (String(entity.type || '').toUpperCase() === 'INSERT') {
         var expanded = insertToFeatures(entity, dxfData);
         for (var j = 0; j < expanded.length; j++) {
           expanded[j].id = 'insert_' + i + '_' + j;
@@ -186,8 +186,9 @@
     if (!entity || !entity.type) return null;
     var strokeColor = getEntityColor(entity, dxfData);
     var thick = isThickLine(entity);
+    var t = String(entity.type).toUpperCase();
 
-    switch (entity.type) {
+    switch (t) {
       case 'LINE':
         return lineToFeature(entity, strokeColor, thick);
       case 'LWPOLYLINE':
@@ -309,11 +310,14 @@
   }
 
   function positionToFeature(entity, strokeColor) {
-    var pos = entity.position || entity.insertionPoint;
-    if (!pos) return null;
+    var pos = entity.position || entity.insertionPoint || entity.insert;
+    if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
     var ll = pt(pos.x, pos.y);
     if (!ll) return null;
-    var textContent = (entity.text != null && entity.text !== '') ? entity.text : (entity.value != null && entity.value !== '') ? entity.value : '';
+    var textContent = '';
+    if (entity.text != null && String(entity.text).trim() !== '') textContent = String(entity.text).trim();
+    else if (entity.value != null && String(entity.value).trim() !== '') textContent = String(entity.value).trim();
+    else if (entity.string != null && String(entity.string).trim() !== '') textContent = String(entity.string).trim();
     return {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: ll },
@@ -357,7 +361,8 @@
     var strokeColor = getEntityColor(blockEntity, dxfData);
     var thick = isThickLine(blockEntity);
     var c1, c2, coords, geom, closed;
-    switch (blockEntity.type) {
+    var bt = String(blockEntity.type).toUpperCase();
+    switch (bt) {
       case 'LINE':
         c1 = blockEntity.startPoint && tf(blockEntity.startPoint.x, blockEntity.startPoint.y);
         c2 = blockEntity.endPoint && tf(blockEntity.endPoint.x, blockEntity.endPoint.y);
@@ -425,11 +430,14 @@
       case 'TEXT':
       case 'MTEXT':
       case 'INSERT': {
-        var bp = blockEntity.position || blockEntity.insertionPoint;
-        if (!bp) return null;
+        var bp = blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+        if (!bp || typeof bp.x !== 'number' || typeof bp.y !== 'number') return null;
         c1 = tf(bp.x, bp.y);
         if (!c1) return null;
-        var bText = (blockEntity.text != null && blockEntity.text !== '') ? blockEntity.text : (blockEntity.value != null && blockEntity.value !== '') ? blockEntity.value : '';
+        var bText = '';
+        if (blockEntity.text != null && String(blockEntity.text).trim() !== '') bText = String(blockEntity.text).trim();
+        else if (blockEntity.value != null && String(blockEntity.value).trim() !== '') bText = String(blockEntity.value).trim();
+        else if (blockEntity.string != null && String(blockEntity.string).trim() !== '') bText = String(blockEntity.string).trim();
         return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', text: bText, strokeColor: strokeColor } };
       }
       default:
@@ -439,8 +447,8 @@
 
   /** INSERT 엔티티: 블록이 있으면 블록 내부 도형을 전개해 여러 Feature로 반환, 없으면 위치만 Point 한 개 */
   function insertToFeatures(entity, dxfData) {
-    var entityPos = entity.position || entity.insertionPoint;
-    if (!entityPos || !entity.name) {
+    var entityPos = entity.position || entity.insertionPoint || entity.insert;
+    if (!entityPos || typeof entityPos.x !== 'number' || typeof entityPos.y !== 'number' || !entity.name) {
       var single = positionToFeature(entity, getEntityColor(entity, dxfData));
       return single ? [single] : [];
     }

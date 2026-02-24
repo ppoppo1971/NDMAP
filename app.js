@@ -478,13 +478,16 @@ function loadDxfFile(file) {
 var dxfTextGreenCircleIcon = null;
 var dxfTextGrayCircleIcon = null;
 
+var dxfTextIconSizePx = 20;
+
 function getDxfTextGreenCircleIcon() {
   if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00C853" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var s = dxfTextIconSizePx;
   dxfTextGreenCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(6, 6),
-    anchor: new google.maps.Point(3, 3)
+    scaledSize: new google.maps.Size(s, s),
+    anchor: new google.maps.Point(s / 2, s / 2)
   };
   return dxfTextGreenCircleIcon;
 }
@@ -492,10 +495,11 @@ function getDxfTextGreenCircleIcon() {
 function getDxfTextGrayCircleIcon() {
   if (dxfTextGrayCircleIcon) return dxfTextGrayCircleIcon;
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888888" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var s = dxfTextIconSizePx;
   dxfTextGrayCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(6, 6),
-    anchor: new google.maps.Point(3, 3)
+    scaledSize: new google.maps.Size(s, s),
+    anchor: new google.maps.Point(s / 2, s / 2)
   };
   return dxfTextGrayCircleIcon;
 }
