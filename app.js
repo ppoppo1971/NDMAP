@@ -139,6 +139,15 @@ function bindUI() {
     exportLocalData();
   });
 
+  var menuConsoleBtn = document.getElementById('menu-console');
+  if (menuConsoleBtn) {
+    menuConsoleBtn.addEventListener('click', function () {
+      slideMenu.classList.remove('active');
+      menuOverlay.classList.remove('active');
+      showConsoleModal();
+    });
+  }
+
   var exportMethodModal = document.getElementById('export-method-modal');
   var exportInfoBox = document.getElementById('export-info-box');
   var exportMethodClose = document.getElementById('export-method-close');
@@ -564,6 +573,102 @@ function bindDxfTextModal() {
   if (modal) modal.addEventListener('click', function (e) {
     if (e.target === modal) hideDxfTextModal();
   });
+}
+
+function showConsoleModal() {
+  var modal = document.getElementById('console-modal');
+  var body = document.getElementById('console-modal-body');
+  var closeBtn = document.getElementById('console-modal-close');
+  if (!modal || !body) return;
+
+  var report = buildConsoleReport();
+  body.textContent = report;
+  modal.classList.add('active');
+
+  if (closeBtn && !closeBtn._consoleBound) {
+    closeBtn._consoleBound = true;
+    closeBtn.addEventListener('click', hideConsoleModal);
+  }
+  if (!modal._consoleBound) {
+    modal._consoleBound = true;
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) hideConsoleModal();
+    });
+  }
+}
+
+function hideConsoleModal() {
+  var modal = document.getElementById('console-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function buildConsoleReport() {
+  var lines = [];
+  lines.push('new_dmap 콘솔');
+  lines.push('------------------------------');
+
+  if (!map) {
+    lines.push('map: 초기화되지 않음');
+  } else {
+    lines.push('map: OK (zoom=' + map.getZoom() + ')');
+  }
+
+  if (!dxfData) {
+    lines.push('dxfData: 없음 (DXF 미로딩)');
+  } else {
+    var entCount = Array.isArray(dxfData.entities) ? dxfData.entities.length : 0;
+    lines.push('dxfData.entities: ' + entCount + ' 개');
+  }
+
+  var totalFeatures = 0;
+  var pointFeatures = 0;
+  var textPoints = 0;
+  var noTextPoints = 0;
+  var textSamples = [];
+
+  if (map && map.data) {
+    map.data.forEach(function (f) {
+      totalFeatures++;
+      var g = f.getGeometry && f.getGeometry();
+      if (!g || !g.getType) return;
+      var t = g.getType();
+      if (t === 'Point') {
+        pointFeatures++;
+        var txt = f.getProperty && f.getProperty('text');
+        var s = txt != null ? String(txt).trim() : '';
+        if (s) {
+          textPoints++;
+          if (textSamples.length < 10) {
+            textSamples.push(s);
+          }
+        } else {
+          noTextPoints++;
+        }
+      }
+    });
+  }
+
+  lines.push('GeoJSON Feature 수: ' + totalFeatures);
+  lines.push('Point Feature 수: ' + pointFeatures);
+  lines.push(' ├─ text 있는 Point: ' + textPoints);
+  lines.push(' └─ text 없는 Point: ' + noTextPoints);
+
+  if (textSamples.length > 0) {
+    lines.push('');
+    lines.push('text 샘플(최대 10개):');
+    textSamples.forEach(function (s, idx) {
+      lines.push('  [' + (idx + 1) + '] ' + s);
+    });
+  } else {
+    lines.push('');
+    lines.push('text 있는 Point가 없습니다.');
+  }
+
+  try {
+    console.log('[new_dmap 콘솔 보고서]\\n' + lines.join('\\n'));
+  } catch (e) {}
+
+  return lines.join('\\n');
 }
 
 function bindDxfDataLayerClick() {

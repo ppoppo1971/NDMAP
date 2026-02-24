@@ -187,6 +187,7 @@
     <button class="slide-menu-item" id="menu-map-type">배경 지도</button>
     <button class="slide-menu-item" id="menu-image-size">용량조정</button>
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
+    <button class="slide-menu-item" id="menu-console">콘솔</button>
   </div>
   <div class="menu-overlay" id="menu-overlay"></div>
 
@@ -276,6 +277,17 @@
         <span class="close-btn" id="dxf-text-modal-close">&times;</span>
       </div>
       <div id="dxf-text-modal-body" style="padding:8px 0; word-break:break-all; max-height:40vh; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- 진단 콘솔 모달 (DXF 문자/Point 등 내부 상태 확인용) -->
+  <div class="modal" id="console-modal">
+    <div class="modal-content" style="max-width:480px; max-height:70vh; overflow-y:auto;">
+      <div class="modal-header">
+        <h3>콘솔</h3>
+        <span class="close-btn" id="console-modal-close">&times;</span>
+      </div>
+      <pre id="console-modal-body" style="white-space:pre-wrap; word-break:break-all; font-size:12px; font-family:SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;"></pre>
     </div>
   </div>
 
