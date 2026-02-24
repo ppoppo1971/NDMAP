@@ -143,8 +143,18 @@ function bindUI() {
   if (toggleDxfTextBtn) {
     toggleDxfTextBtn.addEventListener('click', function () {
       dxfTextVisible = !dxfTextVisible;
-      // 버튼 라벨·아이콘 토글
-      this.textContent = dxfTextVisible ? '👁 문자 숨기기' : '👁 문자 보이기';
+      // 버튼 라벨·아이콘 토글 (◯ = 표시, ◐ = 숨김)
+      var labelSpan = this.querySelector('.dxf-text-toggle-label');
+      var iconSpan = this.querySelector('.dxf-text-toggle-icon');
+      if (labelSpan && iconSpan) {
+        if (dxfTextVisible) {
+          labelSpan.textContent = '문자 숨기기';
+          iconSpan.textContent = '◯'; // 열린 눈(간략)
+        } else {
+          labelSpan.textContent = '문자 보이기';
+          iconSpan.textContent = '◐'; // 감은 눈(간략)
+        }
+      }
       slideMenu.classList.remove('active');
       menuOverlay.classList.remove('active');
       // 스타일 재적용 (Feature 수가 많을 경우 시간이 조금 걸릴 수 있음)
@@ -491,14 +501,16 @@ function loadDxfFile(file) {
       applyDxfToMap();
       updateFileNameDisplay();
       showViewer();
+      // 메타데이터 로드 + 뷰 맞추기까지를 "로딩 중"으로 간주
       loadMetadataAndDisplay(dxfFileFullName).then(function () {
         fitDxfToView();
+      }).finally(function () {
+        // 지도 렌더링이 눈에 보이도록 약간의 여유 후 로딩 닫기
+        setTimeout(function () { showLoading(false); }, 100);
       });
     } catch (err) {
       console.error('DXF 로드 오류:', err);
       alert('DXF 파일을 여는데 실패했습니다: ' + (err.message || err));
-    } finally {
-      showLoading(false);
     }
   }).catch(function (err) {
     showLoading(false);
