@@ -199,8 +199,6 @@ function updateScaleDisplay() {
   var latRad = (centerLat * Math.PI) / 180;
   var metersPerDegLng = 111320 * Math.cos(latRad);
   var widthMeters = (ne.lng() - sw.lng()) * metersPerDegLng;
-  // 전역 축척 캐시 (Point 아이콘 크기 조절용)
-  currentScaleWidthMeters = widthMeters;
   if (widthMeters >= 1000) {
     el.textContent = (widthMeters / 1000).toFixed(1) + 'km';
   } else if (widthMeters >= 10) {
@@ -210,9 +208,6 @@ function updateScaleDisplay() {
   } else {
     el.textContent = (widthMeters * 100).toFixed(0) + 'cm';
   }
-
-  // 축척 변경에 따라 DXF 텍스트 포인트 아이콘 크기 재적용
-  setDxfDataLayerStyle();
 }
 
 function bindScaleDisplay() {
@@ -225,8 +220,6 @@ function bindScaleDisplay() {
   updateScaleDisplay();
 }
 var scaleDisplayTimeout = null;
-// 현재 화면 가로 폭(m) 캐시 (아이콘 크기 조건 분기용)
-var currentScaleWidthMeters = null;
 
 /** 더블탭 시 해당 위치를 중심으로 화면 가로 폭 50m가 되도록 확대/축소 (ADMAP defaultZoomRange 50m) */
 var lastTapTime = 0;
@@ -493,22 +486,14 @@ function loadDxfFile(file) {
 
 var dxfTextGreenCircleIcon = null;
 var dxfTextGrayCircleIcon = null;
-var dxfTextGreenCircleIconSmall = null;
-var dxfTextGrayCircleIconSmall = null;
 
-// 기본 아이콘 크기(픽셀)와 축척 50m 이하일 때 사용할 작은 크기
+// DXF 텍스트 포인트 아이콘 고정 크기
 var dxfTextIconSizePx = 20;
-var dxfTextIconSizePxSmall = 2; // 1/10 크기
-
-function createDxfTextCircleSvg(fillColor) {
-  // 투명도를 더 높여서 지도 위에서 덜 가리도록 fill-opacity를 낮게 설정
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-    '<circle cx="12" cy="12" r="10" fill="' + fillColor + '" fill-opacity="0.12" stroke="#FFFFFF" stroke-width="0.8"/></svg>';
-}
 
 function getDxfTextGreenCircleIcon() {
   if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
-  var svg = createDxfTextCircleSvg('#00C853');
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+    '<circle cx="12" cy="12" r="10" fill="#00C853" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
   var s = dxfTextIconSizePx;
   dxfTextGreenCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -518,21 +503,10 @@ function getDxfTextGreenCircleIcon() {
   return dxfTextGreenCircleIcon;
 }
 
-function getDxfTextGreenCircleIconSmall() {
-  if (dxfTextGreenCircleIconSmall) return dxfTextGreenCircleIconSmall;
-  var svg = createDxfTextCircleSvg('#00C853');
-  var s = dxfTextIconSizePxSmall;
-  dxfTextGreenCircleIconSmall = {
-    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(s, s),
-    anchor: new google.maps.Point(s / 2, s / 2)
-  };
-  return dxfTextGreenCircleIconSmall;
-}
-
 function getDxfTextGrayCircleIcon() {
   if (dxfTextGrayCircleIcon) return dxfTextGrayCircleIcon;
-  var svg = createDxfTextCircleSvg('#888888');
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+    '<circle cx="12" cy="12" r="10" fill="#888888" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
   var s = dxfTextIconSizePx;
   dxfTextGrayCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -542,63 +516,45 @@ function getDxfTextGrayCircleIcon() {
   return dxfTextGrayCircleIcon;
 }
 
-function getDxfTextGrayCircleIconSmall() {
-  if (dxfTextGrayCircleIconSmall) return dxfTextGrayCircleIconSmall;
-  var svg = createDxfTextCircleSvg('#888888');
-  var s = dxfTextIconSizePxSmall;
-  dxfTextGrayCircleIconSmall = {
-    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(s, s),
-    anchor: new google.maps.Point(s / 2, s / 2)
-  };
-  return dxfTextGrayCircleIconSmall;
-}
-
 function applyDxfToMap() {
   if (!map || !dxfData || !window.DxfToGeoJSON) return;
   var geoJson = window.DxfToGeoJSON.dxfToGeoJSON(dxfData);
   map.data.forEach(function (feature) { map.data.remove(feature); });
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
-    setDxfDataLayerStyle();
+    map.data.setStyle(function (feature) {
+      var geom = feature.getGeometry && feature.getGeometry();
+      var geomType = geom && geom.getType ? geom.getType() : '';
+      if (geomType === 'Point') {
+        var text = feature.getProperty('text');
+        if (text != null && String(text).trim() !== '') {
+          return {
+            icon: getDxfTextGreenCircleIcon(),
+            clickable: true
+          };
+        }
+        return {
+          icon: getDxfTextGrayCircleIcon(),
+          clickable: false
+        };
+      }
+      var strokeColor = feature.getProperty('strokeColor') || '#333';
+      var fillColor = feature.getProperty('fillColor') || strokeColor;
+      var thick = feature.getProperty('thick');
+      var strokeWeight = thick ? 3 : 1;
+      return {
+        strokeColor: strokeColor,
+        strokeWeight: strokeWeight,
+        strokeOpacity: 0.9,
+        fillColor: fillColor,
+        fillOpacity: 0.06,
+        clickable: false
+      };
+    });
     dxfBoundsLatLng = boundsFromGeoJSON(geoJson);
   } else {
     dxfBoundsLatLng = null;
   }
-}
-
-function setDxfDataLayerStyle() {
-  if (!map || !map.data) return;
-  map.data.setStyle(function (feature) {
-    var geom = feature.getGeometry && feature.getGeometry();
-    var geomType = geom && geom.getType ? geom.getType() : '';
-    if (geomType === 'Point') {
-      var text = feature.getProperty && feature.getProperty('text');
-      var useSmallIcon = currentScaleWidthMeters != null && currentScaleWidthMeters <= 50;
-      if (text != null && String(text).trim() !== '') {
-        return {
-          icon: useSmallIcon ? getDxfTextGreenCircleIconSmall() : getDxfTextGreenCircleIcon(),
-          clickable: true
-        };
-      }
-      return {
-        icon: useSmallIcon ? getDxfTextGrayCircleIconSmall() : getDxfTextGrayCircleIcon(),
-        clickable: false
-      };
-    }
-    var strokeColor = feature.getProperty && feature.getProperty('strokeColor') || '#333';
-    var fillColor = feature.getProperty && feature.getProperty('fillColor') || strokeColor;
-    var thick = feature.getProperty && feature.getProperty('thick');
-    var strokeWeight = thick ? 3 : 1;
-    return {
-      strokeColor: strokeColor,
-      strokeWeight: strokeWeight,
-      strokeOpacity: 0.9,
-      fillColor: fillColor,
-      fillOpacity: 0.06,
-      clickable: false
-    };
-  });
 }
 
 function showDxfTextModal(text) {
