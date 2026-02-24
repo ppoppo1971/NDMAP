@@ -309,14 +309,15 @@
   }
 
   function positionToFeature(entity, strokeColor) {
-    var pos = entity.position;
+    var pos = entity.position || entity.insertionPoint;
     if (!pos) return null;
     var ll = pt(pos.x, pos.y);
     if (!ll) return null;
+    var textContent = (entity.text != null && entity.text !== '') ? entity.text : (entity.value != null && entity.value !== '') ? entity.value : '';
     return {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: ll },
-      properties: { layer: entity.layer || '', text: entity.text || '', strokeColor: strokeColor }
+      properties: { layer: entity.layer || '', text: textContent, strokeColor: strokeColor }
     };
   }
 
@@ -423,11 +424,14 @@
         return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
       case 'TEXT':
       case 'MTEXT':
-      case 'INSERT':
-        if (!blockEntity.position) return null;
-        c1 = tf(blockEntity.position.x, blockEntity.position.y);
+      case 'INSERT': {
+        var bp = blockEntity.position || blockEntity.insertionPoint;
+        if (!bp) return null;
+        c1 = tf(bp.x, bp.y);
         if (!c1) return null;
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
+        var bText = (blockEntity.text != null && blockEntity.text !== '') ? blockEntity.text : (blockEntity.value != null && blockEntity.value !== '') ? blockEntity.value : '';
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', text: bText, strokeColor: strokeColor } };
+      }
       default:
         return null;
     }
@@ -435,7 +439,8 @@
 
   /** INSERT 엔티티: 블록이 있으면 블록 내부 도형을 전개해 여러 Feature로 반환, 없으면 위치만 Point 한 개 */
   function insertToFeatures(entity, dxfData) {
-    if (!entity.position || !entity.name) {
+    var entityPos = entity.position || entity.insertionPoint;
+    if (!entityPos || !entity.name) {
       var single = positionToFeature(entity, getEntityColor(entity, dxfData));
       return single ? [single] : [];
     }
@@ -444,7 +449,7 @@
       var fe = positionToFeature(entity, getEntityColor(entity, dxfData));
       return fe ? [fe] : [];
     }
-    var insertPos = entity.position;
+    var insertPos = entityPos;
     var blockBase = (block.position != null) ? { x: block.position.x, y: block.position.y } : { x: 0, y: 0 };
     var xScale = entity.xScale != null ? entity.xScale : 1;
     var yScale = entity.yScale != null ? entity.yScale : 1;
