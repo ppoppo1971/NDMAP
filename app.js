@@ -39,6 +39,8 @@ var exportInfo = null; // 내보내기 방식 선택 모달용 { photos, totalSi
 /** 축척 기준 표시: 200m 이상이면 블록·문자 미표시. setStyle에서 참조 */
 var currentScaleWidthMeters = 0;
 var scaleHideDetailThreshold = 200;
+/** Data 레이어 스타일 함수 참조. bounds_changed 시 재적용해 축척 변경 시 표시 전환 */
+var dxfDataStyleFunction = null;
 
 /**
  * Google Maps API 로드 후 콜백
@@ -220,6 +222,7 @@ function bindScaleDisplay() {
   google.maps.event.addListener(map, 'idle', updateScaleDisplay);
   google.maps.event.addListener(map, 'bounds_changed', function () {
     updateScaleCache();
+    if (dxfDataStyleFunction) map.data.setStyle(dxfDataStyleFunction);
     if (scaleDisplayTimeout) clearTimeout(scaleDisplayTimeout);
     scaleDisplayTimeout = setTimeout(updateScaleDisplay, 180);
   });
@@ -497,10 +500,13 @@ function applyDxfToMap() {
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
     updateScaleCache();
-    map.data.setStyle(function (feature) {
+    dxfDataStyleFunction = function (feature) {
       var entityType = feature.getProperty('entityType');
+      var geom = feature.getGeometry && feature.getGeometry();
+      var geomType = geom && geom.getType ? geom.getType() : '';
+      var isPoint = geomType === 'Point';
       var hideDetail = scaleHideDetailThreshold > 0 && currentScaleWidthMeters >= scaleHideDetailThreshold &&
-        (entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'INSERT');
+        ((entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'INSERT') || isPoint);
       if (hideDetail) {
         return {
           strokeColor: '#333',
@@ -523,7 +529,8 @@ function applyDxfToMap() {
         fillOpacity: 0.06,
         clickable: false
       };
-    });
+    };
+    map.data.setStyle(dxfDataStyleFunction);
     dxfBoundsLatLng = boundsFromGeoJSON(geoJson);
   } else {
     dxfBoundsLatLng = null;
