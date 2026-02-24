@@ -88,6 +88,8 @@ function initMap() {
   bindUI();
   bindScaleDisplay();
   bindDoubleTapZoom();
+  bindDxfDataLayerClick();
+  bindDxfTextModal();
   console.log('new_dmap: 지도 초기화 완료 (배경 없음 기본)');
 }
 
@@ -473,6 +475,31 @@ function loadDxfFile(file) {
   });
 }
 
+var dxfTextGreenCircleIcon = null;
+var dxfTextGrayCircleIcon = null;
+
+function getDxfTextGreenCircleIcon() {
+  if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00C853" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  dxfTextGreenCircleIcon = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(6, 6),
+    anchor: new google.maps.Point(3, 3)
+  };
+  return dxfTextGreenCircleIcon;
+}
+
+function getDxfTextGrayCircleIcon() {
+  if (dxfTextGrayCircleIcon) return dxfTextGrayCircleIcon;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888888" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  dxfTextGrayCircleIcon = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(6, 6),
+    anchor: new google.maps.Point(3, 3)
+  };
+  return dxfTextGrayCircleIcon;
+}
+
 function applyDxfToMap() {
   if (!map || !dxfData || !window.DxfToGeoJSON) return;
   var geoJson = window.DxfToGeoJSON.dxfToGeoJSON(dxfData);
@@ -480,6 +507,21 @@ function applyDxfToMap() {
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
     map.data.setStyle(function (feature) {
+      var geom = feature.getGeometry && feature.getGeometry();
+      var geomType = geom && geom.getType ? geom.getType() : '';
+      if (geomType === 'Point') {
+        var text = feature.getProperty('text');
+        if (text != null && String(text).trim() !== '') {
+          return {
+            icon: getDxfTextGreenCircleIcon(),
+            clickable: true
+          };
+        }
+        return {
+          icon: getDxfTextGrayCircleIcon(),
+          clickable: false
+        };
+      }
       var strokeColor = feature.getProperty('strokeColor') || '#333';
       var fillColor = feature.getProperty('fillColor') || strokeColor;
       var thick = feature.getProperty('thick');
@@ -497,6 +539,38 @@ function applyDxfToMap() {
   } else {
     dxfBoundsLatLng = null;
   }
+}
+
+function showDxfTextModal(text) {
+  var modal = document.getElementById('dxf-text-modal');
+  var body = document.getElementById('dxf-text-modal-body');
+  if (body) body.textContent = text == null ? '' : String(text);
+  if (modal) modal.classList.add('active');
+}
+
+function hideDxfTextModal() {
+  var modal = document.getElementById('dxf-text-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function bindDxfTextModal() {
+  var modal = document.getElementById('dxf-text-modal');
+  var closeBtn = document.getElementById('dxf-text-modal-close');
+  if (closeBtn) closeBtn.addEventListener('click', hideDxfTextModal);
+  if (modal) modal.addEventListener('click', function (e) {
+    if (e.target === modal) hideDxfTextModal();
+  });
+}
+
+function bindDxfDataLayerClick() {
+  if (!map) return;
+  map.data.addListener('click', function (e) {
+    if (Date.now() - lastLongPressEndTime < 600) return;
+    var feature = e.feature;
+    if (!feature) return;
+    var text = feature.getProperty('text');
+    if (text != null && String(text).trim() !== '') showDxfTextModal(text);
+  });
 }
 
 function boundsFromGeoJSON(geoJson) {
