@@ -143,13 +143,21 @@ function bindUI() {
   if (toggleDxfTextBtn) {
     toggleDxfTextBtn.addEventListener('click', function () {
       dxfTextVisible = !dxfTextVisible;
-      // 버튼 라벨 토글
-      this.textContent = dxfTextVisible ? '문자 숨기기' : '문자 보이기';
+      // 버튼 라벨·아이콘 토글
+      this.textContent = dxfTextVisible ? '👁 문자 숨기기' : '👁 문자 보이기';
       slideMenu.classList.remove('active');
       menuOverlay.classList.remove('active');
-      // 스타일 재적용
+      // 스타일 재적용 (Feature 수가 많을 경우 시간이 조금 걸릴 수 있음)
       if (map && map.data) {
-        map.data.setStyle(map.data.getStyle()); // 기존 스타일 함수 재사용
+        showLoading(true);
+        // 렌더링 큐에 올린 뒤 약간 지연 후 로딩 숨김
+        setTimeout(function () {
+          try {
+            map.data.setStyle(map.data.getStyle()); // 기존 스타일 함수 재사용
+          } finally {
+            setTimeout(function () { showLoading(false); }, 150);
+          }
+        }, 0);
       }
     });
   }
