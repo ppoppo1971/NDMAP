@@ -653,6 +653,52 @@ function buildConsoleReport() {
   lines.push(' ├─ text 있는 Point: ' + textPoints);
   lines.push(' └─ text 없는 Point: ' + noTextPoints);
 
+  // 원본 DXF 엔티티에서 TEXT/MTEXT/ATTRIB 계열 통계
+  if (dxfData && Array.isArray(dxfData.entities)) {
+    var rawTextCount = 0;
+    var rawMTextCount = 0;
+    var rawAttribCount = 0;
+    var rawSamples = [];
+    dxfData.entities.forEach(function (e) {
+      if (!e || !e.type) return;
+      var t = String(e.type).toUpperCase();
+      if (t === 'TEXT') rawTextCount++;
+      else if (t === 'MTEXT') rawMTextCount++;
+      else if (t === 'ATTRIB' || t === 'ATTDEF') rawAttribCount++;
+
+      if (rawSamples.length < 5 && (t === 'TEXT' || t === 'MTEXT' || t === 'ATTRIB' || t === 'ATTDEF')) {
+        rawSamples.push({
+          type: t,
+          layer: e.layer,
+          position: e.position,
+          insertionPoint: e.insertionPoint || e.insert,
+          text: e.text,
+          value: e.value,
+          string: e.string,
+          height: e.height,
+          rotation: e.rotation
+        });
+      }
+    });
+
+    lines.push('');
+    lines.push('원본 DXF 엔티티(TEXT/MTEXT/ATTRIB):');
+    lines.push('  TEXT  개수: ' + rawTextCount);
+    lines.push('  MTEXT 개수: ' + rawMTextCount);
+    lines.push('  ATTRIB/ATTDEF 개수: ' + rawAttribCount);
+
+    if (rawSamples.length > 0) {
+      lines.push('');
+      lines.push('원본 엔티티 샘플(최대 5개):');
+      rawSamples.forEach(function (s, idx) {
+        lines.push('  [' + (idx + 1) + '] ' + JSON.stringify(s));
+      });
+    } else {
+      lines.push('');
+      lines.push('TEXT/MTEXT/ATTRIB 엔티티를 찾지 못했습니다.');
+    }
+  }
+
   if (textSamples.length > 0) {
     lines.push('');
     lines.push('text 샘플(최대 10개):');
