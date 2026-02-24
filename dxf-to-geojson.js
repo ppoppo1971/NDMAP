@@ -298,7 +298,7 @@
   }
 
   function pointToFeature(entity, strokeColor) {
-    var pos = entity.position;
+    var pos = entity.startPoint || entity.position || entity.insertionPoint || entity.insert;
     if (!pos) return null;
     var ll = pt(pos.x, pos.y);
     if (!ll) return null;
@@ -310,7 +310,8 @@
   }
 
   function positionToFeature(entity, strokeColor) {
-    var pos = entity.position || entity.insertionPoint || entity.insert;
+    // ADMAP createSvgText와 동일하게 startPoint 우선 사용
+    var pos = entity.startPoint || entity.position || entity.insertionPoint || entity.insert;
     if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
     var ll = pt(pos.x, pos.y);
     if (!ll) return null;
@@ -423,14 +424,16 @@
         if (coords.length < 2) return null;
         return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
       case 'POINT':
-        if (!blockEntity.position) return null;
-        c1 = tf(blockEntity.position.x, blockEntity.position.y);
+        var bpPoint = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+        if (!bpPoint || typeof bpPoint.x !== 'number' || typeof bpPoint.y !== 'number') return null;
+        c1 = tf(bpPoint.x, bpPoint.y);
         if (!c1) return null;
         return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
       case 'TEXT':
       case 'MTEXT':
       case 'INSERT': {
-        var bp = blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+        // ADMAP createSvgText: startPoint || position
+        var bp = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
         if (!bp || typeof bp.x !== 'number' || typeof bp.y !== 'number') return null;
         c1 = tf(bp.x, bp.y);
         if (!c1) return null;
