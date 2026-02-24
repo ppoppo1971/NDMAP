@@ -36,11 +36,6 @@ var editingPhotoId = null;
 var editingTextId = null;
 var imageSizeSetting = typeof localStorage !== 'undefined' ? (localStorage.getItem('dmap:imageSize') || '2MB') : '2MB';
 var exportInfo = null; // 내보내기 방식 선택 모달용 { photos, totalSizeMB }
-/** 축척 기준 표시: 200m 이상이면 블록·문자 미표시. setStyle에서 참조 */
-var currentScaleWidthMeters = 0;
-var scaleHideDetailThreshold = 200;
-/** Data 레이어 스타일 함수 참조. bounds_changed 시 재적용해 축척 변경 시 표시 전환 */
-var dxfDataStyleFunction = null;
 
 /**
  * Google Maps API 로드 후 콜백
@@ -177,25 +172,12 @@ function bindUI() {
   }
 }
 
-/** 현재 화면 가로 폭(m)을 계산해 currentScaleWidthMeters에 캐시. 200m 기준 표시 전환용 */
-function updateScaleCache() {
-  if (!map) return;
-  var bounds = map.getBounds();
-  if (!bounds) return;
-  var ne = bounds.getNorthEast();
-  var sw = bounds.getSouthWest();
-  var centerLat = (ne.lat() + sw.lat()) / 2;
-  var latRad = (centerLat * Math.PI) / 180;
-  currentScaleWidthMeters = (ne.lng() - sw.lng()) * 111320 * Math.cos(latRad);
-}
-
 /**
  * ADMAP과 동일: 현재 화면 가로 폭을 미터 단위로 표시.
  * 거리 계산: 지도 bounds(NE, SW)의 경도 차이(도) × 해당 위도에서 1도 경도당 미터(111320×cos(위도)).
  * 위도 1도 ≈ 111320m, 경도 1도 ≈ 111320×cos(위도)m 이므로, 가로 폭(m) = (NE.lng - SW.lng) × 111320 × cos(중심위도).
  */
 function updateScaleDisplay() {
-  updateScaleCache();
   var el = document.getElementById('scale-display');
   if (!el || !map) return;
   var bounds = map.getBounds();
@@ -221,8 +203,6 @@ function bindScaleDisplay() {
   if (!map) return;
   google.maps.event.addListener(map, 'idle', updateScaleDisplay);
   google.maps.event.addListener(map, 'bounds_changed', function () {
-    updateScaleCache();
-    if (dxfDataStyleFunction) map.data.setStyle(dxfDataStyleFunction);
     if (scaleDisplayTimeout) clearTimeout(scaleDisplayTimeout);
     scaleDisplayTimeout = setTimeout(updateScaleDisplay, 180);
   });
@@ -499,24 +479,7 @@ function applyDxfToMap() {
   map.data.forEach(function (feature) { map.data.remove(feature); });
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
-    updateScaleCache();
-    dxfDataStyleFunction = function (feature) {
-      var entityType = feature.getProperty('entityType');
-      var geom = feature.getGeometry && feature.getGeometry();
-      var geomType = geom && geom.getType ? geom.getType() : '';
-      var isPoint = geomType === 'Point';
-      var hideDetail = scaleHideDetailThreshold > 0 && currentScaleWidthMeters >= scaleHideDetailThreshold &&
-        ((entityType === 'TEXT' || entityType === 'MTEXT' || entityType === 'INSERT') || isPoint);
-      if (hideDetail) {
-        return {
-          strokeColor: '#333',
-          strokeWeight: 1,
-          strokeOpacity: 0,
-          fillColor: '#333',
-          fillOpacity: 0,
-          clickable: false
-        };
-      }
+    map.data.setStyle(function (feature) {
       var strokeColor = feature.getProperty('strokeColor') || '#333';
       var fillColor = feature.getProperty('fillColor') || strokeColor;
       var thick = feature.getProperty('thick');
@@ -529,8 +492,7 @@ function applyDxfToMap() {
         fillOpacity: 0.06,
         clickable: false
       };
-    };
-    map.data.setStyle(dxfDataStyleFunction);
+    });
     dxfBoundsLatLng = boundsFromGeoJSON(geoJson);
   } else {
     dxfBoundsLatLng = null;
