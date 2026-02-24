@@ -210,6 +210,9 @@ function updateScaleDisplay() {
   } else {
     el.textContent = (widthMeters * 100).toFixed(0) + 'cm';
   }
+
+  // 축척 변경에 따라 DXF 텍스트 포인트 아이콘 크기 재적용
+  setDxfDataLayerStyle();
 }
 
 function bindScaleDisplay() {
@@ -498,9 +501,9 @@ var dxfTextIconSizePx = 20;
 var dxfTextIconSizePxSmall = 2; // 1/10 크기
 
 function createDxfTextCircleSvg(fillColor) {
-  // 투명도를 높여서 지도 위에서 덜 튀도록 fill-opacity 적용
+  // 투명도를 더 높여서 지도 위에서 덜 가리도록 fill-opacity를 낮게 설정
   return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-    '<circle cx="12" cy="12" r="10" fill="' + fillColor + '" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
+    '<circle cx="12" cy="12" r="10" fill="' + fillColor + '" fill-opacity="0.12" stroke="#FFFFFF" stroke-width="0.8"/></svg>';
 }
 
 function getDxfTextGreenCircleIcon() {
@@ -557,40 +560,45 @@ function applyDxfToMap() {
   map.data.forEach(function (feature) { map.data.remove(feature); });
   if (geoJson.features && geoJson.features.length > 0) {
     map.data.addGeoJson(geoJson);
-    map.data.setStyle(function (feature) {
-      var geom = feature.getGeometry && feature.getGeometry();
-      var geomType = geom && geom.getType ? geom.getType() : '';
-      if (geomType === 'Point') {
-        var text = feature.getProperty('text');
-        var useSmallIcon = currentScaleWidthMeters != null && currentScaleWidthMeters <= 50;
-        if (text != null && String(text).trim() !== '') {
-          return {
-            icon: useSmallIcon ? getDxfTextGreenCircleIconSmall() : getDxfTextGreenCircleIcon(),
-            clickable: true
-          };
-        }
-        return {
-          icon: useSmallIcon ? getDxfTextGrayCircleIconSmall() : getDxfTextGrayCircleIcon(),
-          clickable: false
-        };
-      }
-      var strokeColor = feature.getProperty('strokeColor') || '#333';
-      var fillColor = feature.getProperty('fillColor') || strokeColor;
-      var thick = feature.getProperty('thick');
-      var strokeWeight = thick ? 3 : 1;
-      return {
-        strokeColor: strokeColor,
-        strokeWeight: strokeWeight,
-        strokeOpacity: 0.9,
-        fillColor: fillColor,
-        fillOpacity: 0.06,
-        clickable: false
-      };
-    });
+    setDxfDataLayerStyle();
     dxfBoundsLatLng = boundsFromGeoJSON(geoJson);
   } else {
     dxfBoundsLatLng = null;
   }
+}
+
+function setDxfDataLayerStyle() {
+  if (!map || !map.data) return;
+  map.data.setStyle(function (feature) {
+    var geom = feature.getGeometry && feature.getGeometry();
+    var geomType = geom && geom.getType ? geom.getType() : '';
+    if (geomType === 'Point') {
+      var text = feature.getProperty && feature.getProperty('text');
+      var useSmallIcon = currentScaleWidthMeters != null && currentScaleWidthMeters <= 50;
+      if (text != null && String(text).trim() !== '') {
+        return {
+          icon: useSmallIcon ? getDxfTextGreenCircleIconSmall() : getDxfTextGreenCircleIcon(),
+          clickable: true
+        };
+      }
+      return {
+        icon: useSmallIcon ? getDxfTextGrayCircleIconSmall() : getDxfTextGrayCircleIcon(),
+        clickable: false
+      };
+    }
+    var strokeColor = feature.getProperty && feature.getProperty('strokeColor') || '#333';
+    var fillColor = feature.getProperty && feature.getProperty('fillColor') || strokeColor;
+    var thick = feature.getProperty && feature.getProperty('thick');
+    var strokeWeight = thick ? 3 : 1;
+    return {
+      strokeColor: strokeColor,
+      strokeWeight: strokeWeight,
+      strokeOpacity: 0.9,
+      fillColor: fillColor,
+      fillOpacity: 0.06,
+      clickable: false
+    };
+  });
 }
 
 function showDxfTextModal(text) {
