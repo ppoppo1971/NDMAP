@@ -139,6 +139,21 @@ function bindUI() {
     exportLocalData();
   });
 
+  var toggleDxfTextBtn = document.getElementById('menu-toggle-dxf-text');
+  if (toggleDxfTextBtn) {
+    toggleDxfTextBtn.addEventListener('click', function () {
+      dxfTextVisible = !dxfTextVisible;
+      // 버튼 라벨 토글
+      this.textContent = dxfTextVisible ? '문자 숨기기' : '문자 보이기';
+      slideMenu.classList.remove('active');
+      menuOverlay.classList.remove('active');
+      // 스타일 재적용
+      if (map && map.data) {
+        map.data.setStyle(map.data.getStyle()); // 기존 스타일 함수 재사용
+      }
+    });
+  }
+
   var menuConsoleBtn = document.getElementById('menu-console');
   if (menuConsoleBtn) {
     menuConsoleBtn.addEventListener('click', function () {
@@ -488,12 +503,15 @@ var dxfTextGreenCircleIcon = null;
 var dxfTextGrayCircleIcon = null;
 
 // DXF 텍스트 포인트 아이콘 고정 크기
-var dxfTextIconSizePx = 20;
+var dxfTextIconSizePx = 10;
+
+// DXF 텍스트 포인트 표시 여부 (햄버거 메뉴 토글)
+var dxfTextVisible = true;
 
 function getDxfTextGreenCircleIcon() {
   if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-    '<circle cx="12" cy="12" r="10" fill="#00C853" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
+    '<circle cx="12" cy="12" r="10" fill="#00C853" fill-opacity="0.2" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
   var s = dxfTextIconSizePx;
   dxfTextGreenCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -506,7 +524,7 @@ function getDxfTextGreenCircleIcon() {
 function getDxfTextGrayCircleIcon() {
   if (dxfTextGrayCircleIcon) return dxfTextGrayCircleIcon;
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-    '<circle cx="12" cy="12" r="10" fill="#888888" fill-opacity="0.3" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
+    '<circle cx="12" cy="12" r="10" fill="#888888" fill-opacity="0.2" stroke="#FFFFFF" stroke-width="1.0"/></svg>';
   var s = dxfTextIconSizePx;
   dxfTextGrayCircleIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(svg),
@@ -526,6 +544,9 @@ function applyDxfToMap() {
       var geom = feature.getGeometry && feature.getGeometry();
       var geomType = geom && geom.getType ? geom.getType() : '';
       if (geomType === 'Point') {
+        if (!dxfTextVisible) {
+          return { visible: false, clickable: false };
+        }
         var text = feature.getProperty('text');
         if (text != null && String(text).trim() !== '') {
           return {
