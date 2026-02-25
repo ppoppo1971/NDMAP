@@ -130,6 +130,7 @@ function bindUI() {
   });
   document.getElementById('menu-map-type').addEventListener('click', function () {
     slideMenu.classList.remove('active');
+    menuOverlay.classList.remove('active');
     if (mapTypeSelector) {
       mapTypeSelector.classList.toggle('show');
     }
