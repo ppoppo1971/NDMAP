@@ -42,6 +42,8 @@ var dxfImageRefs = [];
 var dxfImageMarkers = [];
 var editingDxfImageRef = null; // 참조 이미지 뷰어 표시 중인 ref (사진 모달 재사용)
 var dxfImageObjectUrl = null; // 참조 이미지 object URL (닫을 때 revoke)
+var currentLocationMarker = null; // 현재위치 버튼으로 표시한 마커 (지도 터치 시 제거)
+var currentLocationClickListener = null; // 지도 클릭 시 마커 제거용 리스너
 
 /**
  * Google Maps API 로드 후 콜백. 지도는 생성하지 않고 DOM/UI만 준비 (지도는 뷰어 표시 시 ensureMap에서 생성).
@@ -294,6 +296,52 @@ function bindUI() {
   document.getElementById('zoom-out').addEventListener('click', function () {
     if (map) map.setZoom(Math.max(1, (map.getZoom() || 16) - 1));
   });
+
+  var currentLocationBtn = document.getElementById('current-location-btn');
+  if (currentLocationBtn) {
+    currentLocationBtn.addEventListener('click', function () {
+      if (!navigator.geolocation) {
+        alert('이 기기에서는 위치를 사용할 수 없습니다.');
+        return;
+      }
+      ensureMap();
+      if (!map) return;
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          var lat = pos.coords.latitude;
+          var lng = pos.coords.longitude;
+          if (currentLocationMarker) {
+            currentLocationMarker.setMap(null);
+            currentLocationMarker = null;
+          }
+          if (currentLocationClickListener) {
+            google.maps.event.removeListener(currentLocationClickListener);
+            currentLocationClickListener = null;
+          }
+          currentLocationMarker = new google.maps.Marker({
+            map: map,
+            position: { lat: lat, lng: lng },
+            title: '현재 위치'
+          });
+          map.panTo({ lat: lat, lng: lng });
+          currentLocationClickListener = map.addListener('click', function () {
+            if (currentLocationMarker) {
+              currentLocationMarker.setMap(null);
+              currentLocationMarker = null;
+            }
+            if (currentLocationClickListener) {
+              google.maps.event.removeListener(currentLocationClickListener);
+              currentLocationClickListener = null;
+            }
+          });
+        },
+        function () {
+          alert('위치를 가져올 수 없습니다. 위치 권한을 허용했는지 확인하세요.');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
 
   if (mapTypeSelector) {
     mapTypeSelector.querySelectorAll('button[data-type]').forEach(function (btn) {
