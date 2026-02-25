@@ -74,19 +74,49 @@
     }
     .hamburger-btn {
       position: fixed; top: 20px; right: 20px; z-index: 12;
-      background: transparent; border: none; box-shadow: none;
-      color: #007AFF; font-size: 24px; padding: 4px;
-      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      background: transparent;
+      color: #8e24aa;
+      border: none;
+      border-radius: 50%;
+      width: 45px;
+      height: 45px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.2s ease;
     }
-    .hamburger-btn:active { opacity: 0.7; }
+    .hamburger-btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      background: rgba(142, 36, 170, 0.1);
+    }
     .zoom-controls-fixed { position: fixed; bottom: 20px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 12; }
     .zoom-btn {
-      background: transparent; border: none; box-shadow: none;
-      color: #007AFF; font-size: 22px; font-weight: bold; cursor: pointer;
-      width: auto; height: auto; padding: 4px;
-      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      color: #8e24aa;
+      border: none;
+      border-radius: 50%;
+      width: 45px;
+      height: 45px;
+      font-size: 1.5rem;
+      font-weight: 300;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.2s ease;
     }
-    .zoom-btn:active { opacity: 0.7; }
+    .zoom-btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      background: rgba(142, 36, 170, 0.1);
+    }
     .scale-wrapper {
       position: fixed; bottom: 20px; right: 20px; z-index: 12;
       display: inline-block;
@@ -99,15 +129,26 @@
     .current-location-btn {
       position: absolute; bottom: calc(100% + 25px); left: 50%;
       transform: translateX(-50%);
-      width: 32px; height: 32px;
-      background: transparent; border: none; padding: 0; box-shadow: none;
-      background-image: url('https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi.png');
-      background-repeat: no-repeat;
-      background-position: center;
-      background-size: contain;
+      background: transparent;
+      color: #8e24aa;
+      border: none;
+      border-radius: 50%;
+      width: 45px;
+      height: 45px;
+      font-size: 1.3rem;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.2s ease;
     }
-    .current-location-btn:active { opacity: 0.7; }
+    .current-location-btn:active {
+      transform: translateX(-50%) scale(0.95);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      background: rgba(142, 36, 170, 0.1);
+    }
     /* vConsole 플로팅 배지 숨김: 콘솔은 햄버거 메뉴 > 콘솔로만 열기 */
     .vc-switch { display: none !important; }
     .slide-menu {
@@ -207,7 +248,7 @@
       <button class="zoom-btn" id="zoom-out" type="button">−</button>
     </div>
     <div class="scale-wrapper">
-      <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치"></button>
+      <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치">📌</button>
       <div class="scale-display" id="scale-display">—</div>
     </div>
   </div>
