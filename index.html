@@ -206,13 +206,37 @@
     <button class="slide-menu-item" id="menu-image-size">용량조정</button>
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
     <button class="slide-menu-item" id="menu-delete-data">자료 삭제</button>
-    <button class="slide-menu-item" id="menu-toggle-dxf-text">
-      <span class="dxf-text-toggle-label">문자 숨기기</span>
-      <span class="dxf-text-toggle-icon">◯</span>
+    <button class="slide-menu-item" id="menu-toggle-object-visibility">
+      <span class="object-visibility-label">객체 숨기기</span>
     </button>
     <button class="slide-menu-item" id="menu-console">콘솔</button>
   </div>
   <div class="menu-overlay" id="menu-overlay"></div>
+
+  <!-- 객체 표시/숨김 모달 (빨간원·파란원·문자) -->
+  <div class="modal" id="object-visibility-modal">
+    <div class="modal-content" style="max-width:320px;">
+      <div class="modal-header">
+        <h3>👁 객체 표시</h3>
+        <span class="close-btn" id="object-visibility-close">&times;</span>
+      </div>
+      <p style="margin-bottom:12px; font-size:14px; color:#666;">표시할 객체를 선택하세요.</p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="obj-vis-red" checked>
+          <span>빨간원 (촬영 사진)</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="obj-vis-blue" checked>
+          <span>파란원 (참조 이미지)</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="obj-vis-text" checked>
+          <span>문자 (DXF 텍스트)</span>
+        </label>
+      </div>
+    </div>
+  </div>
 
   <!-- 내보내기 방식 선택 모달 (ADMAP과 동일) -->
   <div class="modal" id="export-method-modal">

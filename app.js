@@ -233,38 +233,35 @@ function bindUI() {
     if (typeof console !== 'undefined' && console.warn) console.warn('[new_dmap] menu-delete-data 요소를 찾을 수 없음. 슬라이드 메뉴 항목 수:', document.querySelectorAll('#slide-menu .slide-menu-item').length);
   }
 
-  var toggleDxfTextBtn = document.getElementById('menu-toggle-dxf-text');
-  if (toggleDxfTextBtn) {
-    toggleDxfTextBtn.addEventListener('click', function () {
-      dxfTextVisible = !dxfTextVisible;
-      // 버튼 라벨·아이콘 토글 (◯ = 표시, ◐ = 숨김)
-      var labelSpan = this.querySelector('.dxf-text-toggle-label');
-      var iconSpan = this.querySelector('.dxf-text-toggle-icon');
-      if (labelSpan && iconSpan) {
-        if (dxfTextVisible) {
-          labelSpan.textContent = '문자 숨기기';
-          iconSpan.textContent = '◯'; // 열린 눈(간략)
-        } else {
-          labelSpan.textContent = '문자 보이기';
-          iconSpan.textContent = '◐'; // 감은 눈(간략)
-        }
-      }
+  var toggleObjectVisibilityBtn = document.getElementById('menu-toggle-object-visibility');
+  if (toggleObjectVisibilityBtn) {
+    toggleObjectVisibilityBtn.addEventListener('click', function () {
       slideMenu.classList.remove('active');
       menuOverlay.classList.remove('active');
-      // 스타일 재적용 (Feature 수가 많을 경우 시간이 조금 걸릴 수 있음)
-      if (map && map.data) {
-        showLoading(true);
-        // 렌더링 큐에 올린 뒤 약간 지연 후 로딩 숨김
-        setTimeout(function () {
-          try {
-            map.data.setStyle(map.data.getStyle()); // 기존 스타일 함수 재사용
-          } finally {
-            setTimeout(function () { showLoading(false); }, 150);
-          }
-        }, 0);
-      }
+      showObjectVisibilityModal();
     });
   }
+
+  var objVisModal = document.getElementById('object-visibility-modal');
+  var objVisClose = document.getElementById('object-visibility-close');
+  var objVisRed = document.getElementById('obj-vis-red');
+  var objVisBlue = document.getElementById('obj-vis-blue');
+  var objVisText = document.getElementById('obj-vis-text');
+  if (objVisClose) objVisClose.addEventListener('click', hideObjectVisibilityModal);
+  if (objVisModal) {
+    objVisModal.addEventListener('click', function (e) {
+      if (e.target === objVisModal) hideObjectVisibilityModal();
+    });
+  }
+  function syncObjectVisibilityFromCheckboxes() {
+    photoMarkersVisible = objVisRed ? objVisRed.checked : true;
+    dxfImageMarkersVisible = objVisBlue ? objVisBlue.checked : true;
+    dxfTextVisible = objVisText ? objVisText.checked : true;
+    applyObjectVisibility();
+  }
+  if (objVisRed) objVisRed.addEventListener('change', syncObjectVisibilityFromCheckboxes);
+  if (objVisBlue) objVisBlue.addEventListener('change', syncObjectVisibilityFromCheckboxes);
+  if (objVisText) objVisText.addEventListener('change', syncObjectVisibilityFromCheckboxes);
 
   var menuConsoleBtn = document.getElementById('menu-console');
   if (menuConsoleBtn) {
@@ -760,8 +757,11 @@ var dxfTextGrayCircleIcon = null;
 // DXF 텍스트 포인트 아이콘 고정 크기
 var dxfTextIconSizePx = 10;
 
-// DXF 텍스트 포인트 표시 여부 (햄버거 메뉴 토글)
+// DXF 텍스트 포인트 표시 여부 (객체 숨기기 모달)
 var dxfTextVisible = true;
+// 빨간원(촬영 사진)·파란원(참조 이미지) 표시 여부
+var photoMarkersVisible = true;
+var dxfImageMarkersVisible = true;
 
 function getDxfTextGreenCircleIcon() {
   if (dxfTextGreenCircleIcon) return dxfTextGreenCircleIcon;
@@ -1259,18 +1259,20 @@ function clearDxfImageMarkers() {
 function drawDxfImageMarkers() {
   clearDxfImageMarkers();
   if (!map || !window.DxfToGeoJSON) return;
+  // 빨간원(사진 마커)과 동일: viewBox 24x24, circle cx=12 cy=12 r=10, 크기 12px, 짙은 파란색
   var blueSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-    '<circle cx="12" cy="12" r="10" fill="#2196F3" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+    '<circle cx="12" cy="12" r="10" fill="#1565C0" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var sizePx = 12;
   var blueIcon = {
     url: 'data:image/svg+xml,' + encodeURIComponent(blueSvg),
-    scaledSize: new google.maps.Size(38, 38),
-    anchor: new google.maps.Point(19, 19)
+    scaledSize: new google.maps.Size(sizePx, sizePx),
+    anchor: new google.maps.Point(sizePx / 2, sizePx / 2)
   };
   dxfImageRefs.forEach(function (ref) {
     var pos = dxfToLatLng(ref.x, ref.y);
     if (!pos) return;
     var m = new google.maps.Marker({
-      map: map,
+      map: dxfImageMarkersVisible ? map : null,
       position: pos,
       icon: blueIcon,
       title: ref.fileName || '참조 이미지'
@@ -1282,6 +1284,41 @@ function drawDxfImageMarkers() {
     });
     dxfImageMarkers.push(m);
   });
+}
+
+function applyObjectVisibility() {
+  if (photoMarkers) {
+    photoMarkers.forEach(function (m) {
+      if (m && m.setMap) m.setMap(photoMarkersVisible ? map : null);
+    });
+  }
+  if (dxfImageMarkers) {
+    dxfImageMarkers.forEach(function (m) {
+      if (m && m.setMap) m.setMap(dxfImageMarkersVisible ? map : null);
+    });
+  }
+  if (map && map.data) {
+    try {
+      map.data.setStyle(map.data.getStyle());
+    } catch (e) { /* no-op */ }
+  }
+}
+
+function showObjectVisibilityModal() {
+  var modal = document.getElementById('object-visibility-modal');
+  var redCb = document.getElementById('obj-vis-red');
+  var blueCb = document.getElementById('obj-vis-blue');
+  var textCb = document.getElementById('obj-vis-text');
+  if (!modal || !redCb || !blueCb || !textCb) return;
+  redCb.checked = photoMarkersVisible;
+  blueCb.checked = dxfImageMarkersVisible;
+  textCb.checked = dxfTextVisible;
+  modal.classList.add('active');
+}
+
+function hideObjectVisibilityModal() {
+  var modal = document.getElementById('object-visibility-modal');
+  if (modal) modal.classList.remove('active');
 }
 
 function loadMetadataAndDisplay(dxfFile) {
@@ -1352,7 +1389,7 @@ function drawPhotoMarkers() {
       anchor: new google.maps.Point(sizePx / 2, sizePx / 2)
     };
     var m = new google.maps.Marker({
-      map: map,
+      map: photoMarkersVisible ? map : null,
       position: pos,
       icon: icon,
       title: p.memo || p.fileName || '사진'
