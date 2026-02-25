@@ -53,6 +53,12 @@ function initMap() {
   mapTypeSelector = document.getElementById('map-type-selector');
   contextMenuEl = document.getElementById('context-menu');
 
+  var crsEl = document.getElementById('menu-map-type-crs');
+  if (crsEl) {
+    var C = window.DMAP_CONFIG || {};
+    crsEl.textContent = C.DXF_CRS ? '(' + C.DXF_CRS + ')' : '';
+  }
+
   if (window.localStore && window.localStore.init) {
     window.localStore.init().catch(function () {});
   }

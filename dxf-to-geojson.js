@@ -1,11 +1,13 @@
 /**
  * new_dmap - DXF → GeoJSON 변환 및 DXF ↔ WGS84 좌표 변환
- * 지도 엔진(WGS84)에 맞게 도면 좌표를 변환
+ * 지도 엔진(WGS84)에 맞게 도면 좌표를 변환.
+ * DXF가 평면직각좌표(EPSG)이면 config.DXF_CRS에 EPSG 코드 지정 시 proj4로 변환.
  */
 (function (global) {
   'use strict';
 
   var C = global.DMAP_CONFIG || {};
+  var dxfCrs = C.DXF_CRS || null;
   var lat0 = C.MAP_ORIGIN_LAT != null ? C.MAP_ORIGIN_LAT : 36.3;
   var lng0 = C.MAP_ORIGIN_LNG != null ? C.MAP_ORIGIN_LNG : 127.8;
   var unitsPerMeter = C.DXF_UNITS_PER_METER != null ? C.DXF_UNITS_PER_METER : 1;
@@ -16,13 +18,34 @@
     return 111320 * Math.cos((lat0 * Math.PI) / 180);
   }
 
+  var proj4Defined = false;
+  function ensureProj4Defs() {
+    if (proj4Defined || typeof proj4 === 'undefined') return;
+    proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
+    proj4.defs('EPSG:5186', '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +units=m +no_defs');
+    proj4.defs('EPSG:5181', '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +units=m +no_defs');
+    proj4.defs('EPSG:5179', '+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs');
+    proj4Defined = true;
+  }
+
   /**
    * DXF 좌표 (x, y) → WGS84 [longitude, latitude]
-   * GeoJSON 순서는 [lng, lat]
+   * DXF_CRS가 설정되면 (x,y)를 해당 평면직각좌표로 보고 proj4로 WGS84 변환. (y 음수 가능)
    */
   function dxfToLngLat(x, y) {
     if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) {
       return null;
+    }
+    if (dxfCrs && typeof proj4 !== 'undefined') {
+      try {
+        ensureProj4Defs();
+        var out = proj4(dxfCrs, 'EPSG:4326', [x, y]);
+        return out && out.length >= 2 ? [out[0], out[1]] : null;
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('dxfToLngLat proj4 실패, 원점 모드 사용:', err.message);
+        }
+      }
     }
     var metersX = x / unitsPerMeter;
     var metersY = y / unitsPerMeter;
@@ -37,6 +60,17 @@
   function lngLatToDxf(lng, lat) {
     if (typeof lng !== 'number' || typeof lat !== 'number' || !isFinite(lng) || !isFinite(lat)) {
       return null;
+    }
+    if (dxfCrs && typeof proj4 !== 'undefined') {
+      try {
+        ensureProj4Defs();
+        var out = proj4('EPSG:4326', dxfCrs, [lng, lat]);
+        return out && out.length >= 2 ? { x: out[0], y: out[1] } : null;
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('lngLatToDxf proj4 실패, 원점 모드 사용:', err.message);
+        }
+      }
     }
     var metersX = (lng - lng0) * metersPerDegLng();
     var metersY = (lat - lat0) * METERS_PER_DEG_LAT;
