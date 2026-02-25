@@ -268,7 +268,7 @@ function bindUI() {
     menuConsoleBtn.addEventListener('click', function () {
       slideMenu.classList.remove('active');
       menuOverlay.classList.remove('active');
-      showConsoleModal();
+      toggleVConsole();
     });
   }
 
@@ -942,31 +942,33 @@ function bindDeleteDataModal() {
   });
 }
 
-function showConsoleModal() {
-  var modal = document.getElementById('console-modal');
-  var body = document.getElementById('console-modal-body');
-  var closeBtn = document.getElementById('console-modal-close');
-  if (!modal || !body) return;
-
-  var report = buildConsoleReport();
-  body.textContent = report;
-  modal.classList.add('active');
-
-  if (closeBtn && !closeBtn._consoleBound) {
-    closeBtn._consoleBound = true;
-    closeBtn.addEventListener('click', hideConsoleModal);
+/** ADMAP처럼 vConsole 토글. 열릴 때 진단 보고서를 로그로 출력해 프로그램 전체 상태 확인에 활용 */
+function toggleVConsole() {
+  var vcSwitch = document.querySelector('.vc-switch');
+  if (vcSwitch) {
+    vcSwitch.click();
+    try {
+      console.log('[new_dmap] vConsole 토글됨');
+      console.log(buildConsoleReport());
+    } catch (e) {}
+    return;
   }
-  if (!modal._consoleBound) {
-    modal._consoleBound = true;
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) hideConsoleModal();
-    });
+  var vc = window.vConsole || (typeof vConsole !== 'undefined' ? vConsole : null);
+  if (vc) {
+    var vcPanel = document.querySelector('.vc-panel');
+    var isOpen = vcPanel && vcPanel.offsetParent !== null && vcPanel.style.display !== 'none';
+    if (isOpen) {
+      vc.hide();
+    } else {
+      vc.show();
+      try {
+        console.log('[new_dmap] vConsole 열림');
+        console.log(buildConsoleReport());
+      } catch (e) {}
+    }
+  } else {
+    console.warn('[new_dmap] vConsole이 로드되지 않았습니다. index.html에 vConsole 스크립트를 추가하세요.');
   }
-}
-
-function hideConsoleModal() {
-  var modal = document.getElementById('console-modal');
-  if (modal) modal.classList.remove('active');
 }
 
 function buildConsoleReport() {
@@ -1077,11 +1079,11 @@ function buildConsoleReport() {
     lines.push('text 있는 Point가 없습니다.');
   }
 
+  var reportText = lines.join('\n');
   try {
-    console.log('[new_dmap 콘솔 보고서]\\n' + lines.join('\\n'));
+    console.log('[new_dmap 콘솔 보고서]\n' + reportText);
   } catch (e) {}
-
-  return lines.join('\\n');
+  return reportText;
 }
 
 function bindDxfDataLayerClick() {

@@ -397,5 +397,21 @@
       document.head.appendChild(s);
     })();
   </script>
+  <!-- vConsole: ADMAP과 동일한 모바일 디버깅 콘솔 (햄버거 메뉴 > 콘솔로 토글) -->
+  <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+  <script>
+    (function() {
+      if (typeof window.VConsole === 'undefined') return;
+      var vConsole = new window.VConsole({
+        defaultPlugins: ['system', 'network', 'element', 'storage'],
+        maxLogNumber: 1000,
+        theme: 'dark',
+        onReady: function() {
+          console.log('📱 vConsole 준비됨 (햄버거 메뉴 > 콘솔에서 열기)');
+        }
+      });
+      window.vConsole = vConsole;
+    })();
+  </script>
 </body>
 </html>
