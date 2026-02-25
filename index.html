@@ -87,12 +87,18 @@
       display: flex; align-items: center; justify-content: center;
     }
     .zoom-btn:active { opacity: 0.7; }
+    .scale-wrapper {
+      position: fixed; bottom: 20px; right: 20px; z-index: 12;
+      display: inline-block;
+    }
     .scale-display {
-      position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.45); color: white;
-      padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; z-index: 12;
+      background: rgba(0,0,0,0.45); color: white;
+      padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;
+      display: inline-block;
     }
     .current-location-btn {
-      position: fixed; bottom: 70px; right: 20px; z-index: 12;
+      position: absolute; bottom: calc(100% + 25px); left: 50%;
+      transform: translateX(-50%);
       width: 32px; height: 32px;
       background: transparent; border: none; padding: 0; box-shadow: none;
       background-image: url('https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi.png');
@@ -200,8 +206,10 @@
       <button class="zoom-btn" id="zoom-in" type="button">+</button>
       <button class="zoom-btn" id="zoom-out" type="button">−</button>
     </div>
-    <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치"></button>
-    <div class="scale-display" id="scale-display">—</div>
+    <div class="scale-wrapper">
+      <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치"></button>
+      <div class="scale-display" id="scale-display">—</div>
+    </div>
   </div>
 
   <!-- 배경 지도 선택 (VMAP처럼 구글·브이월드 선택) -->
