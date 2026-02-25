@@ -90,6 +90,7 @@ function initMap() {
   bindDoubleTapZoom();
   bindDxfDataLayerClick();
   bindDxfTextModal();
+  bindDeleteDataModal();
   console.log('new_dmap: 지도 초기화 완료 (배경 없음 기본)');
 }
 
@@ -138,6 +139,15 @@ function bindUI() {
     }
     exportLocalData();
   });
+
+  var menuDeleteData = document.getElementById('menu-delete-data');
+  if (menuDeleteData) {
+    menuDeleteData.addEventListener('click', function () {
+      slideMenu.classList.remove('active');
+      menuOverlay.classList.remove('active');
+      showDeleteDataModal();
+    });
+  }
 
   var toggleDxfTextBtn = document.getElementById('menu-toggle-dxf-text');
   if (toggleDxfTextBtn) {
@@ -616,6 +626,94 @@ function bindDxfTextModal() {
   if (closeBtn) closeBtn.addEventListener('click', hideDxfTextModal);
   if (modal) modal.addEventListener('click', function (e) {
     if (e.target === modal) hideDxfTextModal();
+  });
+}
+
+function showDeleteDataModal() {
+  var modal = document.getElementById('delete-data-modal');
+  var startInput = document.getElementById('delete-start-date');
+  var endInput = document.getElementById('delete-end-date');
+  if (!modal || !startInput || !endInput) return;
+  var today = new Date();
+  var yyyy = today.getFullYear();
+  var mm = String(today.getMonth() + 1).padStart(2, '0');
+  var dd = String(today.getDate()).padStart(2, '0');
+  var todayStr = yyyy + '-' + mm + '-' + dd;
+  if (!startInput.value) startInput.value = todayStr;
+  if (!endInput.value) endInput.value = todayStr;
+  modal.classList.add('active');
+}
+
+function hideDeleteDataModal() {
+  var modal = document.getElementById('delete-data-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function deleteDataByDateRange() {
+  var startInput = document.getElementById('delete-start-date');
+  var endInput = document.getElementById('delete-end-date');
+  if (!startInput || !endInput) return;
+  var startValue = startInput.value;
+  var endValue = endInput.value;
+  if (!startValue || !endValue) {
+    alert('삭제할 날짜 범위를 선택하세요.');
+    return;
+  }
+  if (!dxfFileFullName || !window.localStore) {
+    alert('저장된 자료가 없습니다.');
+    return;
+  }
+  var startDate = new Date(startValue + 'T00:00:00');
+  var endDate = new Date(endValue + 'T23:59:59.999');
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    alert('날짜 형식이 올바르지 않습니다.');
+    return;
+  }
+  if (startDate > endDate) {
+    alert('시작 날짜가 종료 날짜보다 늦습니다.');
+    return;
+  }
+  if (!confirm('선택한 날짜 범위의 사진과 메타데이터를 삭제하시겠습니까?\n복구할 수 없습니다.')) return;
+  var startMs = startDate.getTime();
+  var endMs = endDate.getTime();
+  window.localStore.deletePhotosByDateRange(dxfFileFullName, startMs, endMs).then(function (deletedIds) {
+    var beforeTextCount = texts.length;
+    texts = texts.filter(function (t) {
+      if (!t.createdAt) return true;
+      var ms = new Date(t.createdAt).getTime();
+      return ms < startMs || ms > endMs;
+    });
+    var deletedTextCount = beforeTextCount - texts.length;
+    var deletedIdSet = {};
+    for (var i = 0; i < deletedIds.length; i++) deletedIdSet[String(deletedIds[i])] = true;
+    photos = photos.filter(function (p) { return !deletedIdSet[String(p.id)]; });
+    window.localStore.saveProject(dxfFileFullName, { texts: texts, lastModified: new Date().toISOString() }).then(function () {
+      drawPhotoMarkers();
+      drawTextMarkers();
+      hideDeleteDataModal();
+      hidePhotoModal();
+      if (deletedIds.length === 0 && deletedTextCount === 0) {
+        alert('삭제할 데이터가 없습니다.');
+      } else {
+        alert('사진 ' + deletedIds.length + '개, 텍스트 ' + deletedTextCount + '개 삭제 완료');
+      }
+    });
+  }).catch(function (err) {
+    console.error('자료 삭제 실패:', err);
+    alert('삭제 실패: ' + (err && err.message ? err.message : '알 수 없음'));
+  });
+}
+
+function bindDeleteDataModal() {
+  var modal = document.getElementById('delete-data-modal');
+  var closeBtn = document.getElementById('delete-data-close');
+  var cancelBtn = document.getElementById('delete-data-cancel');
+  var confirmBtn = document.getElementById('delete-data-confirm');
+  if (closeBtn) closeBtn.addEventListener('click', hideDeleteDataModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', hideDeleteDataModal);
+  if (confirmBtn) confirmBtn.addEventListener('click', deleteDataByDateRange);
+  if (modal) modal.addEventListener('click', function (e) {
+    if (e.target === modal) hideDeleteDataModal();
   });
 }
 
