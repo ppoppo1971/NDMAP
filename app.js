@@ -37,6 +37,11 @@ var editingTextId = null;
 var imageSizeSetting = typeof localStorage !== 'undefined' ? (localStorage.getItem('dmap:imageSize') || '2MB') : '2MB';
 var exportInfo = null; // 내보내기 방식 선택 모달용 { photos, totalSizeMB }
 var mapBindingsDone = false; // ensureMap에서 map 의존 바인딩 1회만 수행
+/** DXF에 참조된 이미지: { id, x, y, fileName, file?: File }. 파란원으로 표시, 클릭 시 뷰어. 내보내기에는 미포함. */
+var dxfImageRefs = [];
+var dxfImageMarkers = [];
+var editingDxfImageRef = null; // 참조 이미지 뷰어 표시 중인 ref (사진 모달 재사용)
+var dxfImageObjectUrl = null; // 참조 이미지 object URL (닫을 때 revoke)
 
 /**
  * Google Maps API 로드 후 콜백. 지도는 생성하지 않고 DOM/UI만 준비 (지도는 뷰어 표시 시 ensureMap에서 생성).
@@ -159,6 +164,14 @@ function bindUI() {
     localFileInput.addEventListener('change', function (e) {
       var file = e.target && e.target.files[0];
       if (file) loadDxfFile(file);
+      e.target.value = '';
+    });
+  }
+  var folderInput = document.getElementById('folder-input');
+  if (folderInput) {
+    folderInput.addEventListener('change', function (e) {
+      var files = e.target && e.target.files;
+      if (files && files.length) loadDxfFromFolder(files);
       e.target.value = '';
     });
   }
@@ -566,6 +579,135 @@ function extractConstantWidths(dxfData, dxfText) {
   });
 }
 
+/**
+ * DXF 원문에서 IMAGE 엔티티와 IMAGEDEF 객체를 파싱해 참조 이미지 목록 반환.
+ * IMAGE: 10,20 (삽입점), 340 (IMAGEDEF 핸들). IMAGEDEF: 5 (핸들), 1 (파일명).
+ */
+function extractDxfImageRefs(dxfText) {
+  if (!dxfText || typeof dxfText !== 'string') return [];
+  var lines = dxfText.split(/\r?\n/).map(function (l) { return l.trim(); });
+  var handleToFilename = {};
+  var refs = [];
+  var i, j, code, val, section, x, y, handle, defHandle, defFile, fn;
+
+  for (i = 0; i < lines.length - 3; i++) {
+    if (lines[i] !== '0' || lines[i + 1] !== 'SECTION') continue;
+    section = lines[i + 3];
+    if (section === 'OBJECTS') {
+      for (j = i + 4; j < lines.length - 1; j++) {
+        code = lines[j];
+        val = lines[j + 1];
+        if (code === '0' && val === 'ENDSEC') break;
+        if (code === '0' && val === 'IMAGEDEF') {
+          defHandle = '';
+          defFile = '';
+          for (j = j + 2; j < lines.length - 1; j += 2) {
+            code = lines[j];
+            val = lines[j + 1];
+            if (code === '0') { j -= 2; break; }
+            if (code === '5') defHandle = val;
+            if (code === '1') defFile = val;
+          }
+          if (defHandle && defFile) handleToFilename[defHandle.toUpperCase()] = defFile.replace(/\\/g, '/');
+        }
+      }
+      break;
+    }
+  }
+  for (i = 0; i < lines.length - 3; i++) {
+    if (lines[i] !== '0' || lines[i + 1] !== 'SECTION') continue;
+    section = lines[i + 3];
+    if (section === 'ENTITIES') {
+      for (j = i + 4; j < lines.length - 1; j++) {
+        code = lines[j];
+        val = lines[j + 1];
+        if (code === '0' && val === 'ENDSEC') break;
+        if (code === '0' && val === 'IMAGE') {
+          x = y = handle = null;
+          for (j = j + 2; j < lines.length - 1; j += 2) {
+            code = lines[j];
+            val = lines[j + 1];
+            if (code === '0') { j -= 2; break; }
+            if (code === '10') x = parseFloat(val);
+            if (code === '20') y = parseFloat(val);
+            if (code === '340') handle = val ? String(val).toUpperCase() : '';
+          }
+          if (x != null && !isNaN(x) && y != null && !isNaN(y)) {
+            fn = (handle && handleToFilename[handle]) ? handleToFilename[handle] : '';
+            refs.push({ x: x, y: y, fileName: fn || '(이미지)', handle: handle });
+          }
+        }
+      }
+      break;
+    }
+  }
+  return refs;
+}
+
+function fileBasename(pathOrName) {
+  if (typeof pathOrName !== 'string') return '';
+  var s = pathOrName.replace(/\\/g, '/');
+  var i = s.lastIndexOf('/');
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
+function loadDxfFromFolder(files) {
+  var arr = Array.from(files || []);
+  var dxfFile = arr.filter(function (f) { return (f.name || '').toLowerCase().endsWith('.dxf'); })[0];
+  if (!dxfFile) {
+    alert('선택한 폴더에 DXF 파일이 없습니다.');
+    return;
+  }
+  var fileMapByBasename = {};
+  arr.forEach(function (f) {
+    var name = (f.name || '').toLowerCase();
+    fileMapByBasename[name] = f;
+    fileMapByBasename[fileBasename(name)] = f;
+  });
+  showLoading(true);
+  dxfFile.text().then(function (text) {
+    try {
+      if (!text || !text.includes('SECTION') || !text.includes('ENTITIES')) {
+        throw new Error('올바른 DXF 파일 형식이 아닙니다.');
+      }
+      if (typeof DxfParser === 'undefined') {
+        throw new Error('DXF 파서 라이브러리가 로드되지 않았습니다.');
+      }
+      var parser = new DxfParser();
+      dxfData = parser.parseSync(text);
+      if (!dxfData) throw new Error('DXF 파싱에 실패했습니다.');
+      if (!dxfData.entities || dxfData.entities.length === 0) {
+        console.warn('DXF 엔티티 없음');
+      }
+      extractConstantWidths(dxfData, text);
+      var rawRefs = extractDxfImageRefs(text);
+      dxfImageRefs = rawRefs.map(function (r, idx) {
+        var base = fileBasename(r.fileName).toLowerCase();
+        var matched = fileMapByBasename[base] || fileMapByBasename[(r.fileName || '').toLowerCase()];
+        return { id: 'dxfimg-' + idx, x: r.x, y: r.y, fileName: r.fileName, file: matched || null };
+      });
+      dxfFileName = dxfFile.name;
+      dxfFileFullName = dxfFile.name;
+      showViewer();
+      applyDxfToMap();
+      updateFileNameDisplay();
+      drawDxfImageMarkers();
+      loadMetadataAndDisplay(dxfFileFullName).then(function () {
+        fitDxfToView();
+      }).finally(function () {
+        setTimeout(function () { showLoading(false); }, 100);
+      });
+    } catch (err) {
+      console.error('DXF 로드 오류:', err);
+      alert('DXF 파일을 여는데 실패했습니다: ' + (err.message || err));
+    }
+  }).catch(function (err) {
+    showLoading(false);
+    alert('파일을 읽을 수 없습니다.');
+    console.error(err);
+  });
+}
+
 function loadDxfFile(file) {
   if (!file || !file.name) return;
   showLoading(true);
@@ -584,11 +726,16 @@ function loadDxfFile(file) {
         console.warn('DXF 엔티티 없음');
       }
       extractConstantWidths(dxfData, text);
+      var rawRefs = extractDxfImageRefs(text);
+      dxfImageRefs = rawRefs.map(function (r, idx) {
+        return { id: 'dxfimg-' + idx, x: r.x, y: r.y, fileName: r.fileName, file: null };
+      });
       dxfFileName = file.name;
       dxfFileFullName = file.name;
       showViewer();
       applyDxfToMap();
       updateFileNameDisplay();
+      drawDxfImageMarkers();
       // 메타데이터 로드 + 뷰 맞추기까지를 "로딩 중"으로 간주
       loadMetadataAndDisplay(dxfFileFullName).then(function () {
         fitDxfToView();
@@ -1102,6 +1249,41 @@ function dxfToLatLng(x, y) {
   return ll ? { lat: ll[1], lng: ll[0] } : null;
 }
 
+function clearDxfImageMarkers() {
+  dxfImageMarkers.forEach(function (m) {
+    if (m && m.setMap) m.setMap(null);
+  });
+  dxfImageMarkers = [];
+}
+
+function drawDxfImageMarkers() {
+  clearDxfImageMarkers();
+  if (!map || !window.DxfToGeoJSON) return;
+  var blueSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+    '<circle cx="12" cy="12" r="10" fill="#2196F3" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
+  var blueIcon = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(blueSvg),
+    scaledSize: new google.maps.Size(38, 38),
+    anchor: new google.maps.Point(19, 19)
+  };
+  dxfImageRefs.forEach(function (ref) {
+    var pos = dxfToLatLng(ref.x, ref.y);
+    if (!pos) return;
+    var m = new google.maps.Marker({
+      map: map,
+      position: pos,
+      icon: blueIcon,
+      title: ref.fileName || '참조 이미지'
+    });
+    m.dxfImageRef = ref;
+    m.addListener('click', function () {
+      if (Date.now() - lastLongPressEndTime < 600) return;
+      showDxfImageModal(ref);
+    });
+    dxfImageMarkers.push(m);
+  });
+}
+
 function loadMetadataAndDisplay(dxfFile) {
   if (!window.localStore) return Promise.resolve();
   photos = [];
@@ -1523,18 +1705,62 @@ function addTextAtPosition(xy, textStr) {
 }
 
 function showPhotoModal(photoId) {
+  editingDxfImageRef = null;
+  if (dxfImageObjectUrl) {
+    URL.revokeObjectURL(dxfImageObjectUrl);
+    dxfImageObjectUrl = null;
+  }
   editingPhotoId = photoId;
   var modal = document.getElementById('photo-modal');
   var img = document.getElementById('photo-modal-img');
   var memo = document.getElementById('photo-modal-memo');
+  var titleEl = document.getElementById('photo-modal-title');
+  var actionsEl = document.getElementById('photo-modal-actions');
+  var noFileEl = document.getElementById('photo-modal-no-file');
   if (!modal || !img || !memo) return;
   var p = photos.filter(function (x) { return x.id === photoId; })[0];
   if (!p) { modal.classList.remove('active'); return; }
+  if (titleEl) titleEl.textContent = '📷 사진';
+  if (actionsEl) actionsEl.style.display = 'flex';
+  if (noFileEl) noFileEl.style.display = 'none';
+  memo.style.display = 'block';
   memo.value = p.memo || '';
+  img.style.display = 'block';
   img.src = '';
   window.localStore.getPhotoDataUrl(photoId).then(function (url) {
     img.src = url || '';
   });
+  modal.classList.add('active');
+}
+
+function showDxfImageModal(ref) {
+  editingPhotoId = null;
+  editingDxfImageRef = ref;
+  var modal = document.getElementById('photo-modal');
+  var img = document.getElementById('photo-modal-img');
+  var memo = document.getElementById('photo-modal-memo');
+  var titleEl = document.getElementById('photo-modal-title');
+  var actionsEl = document.getElementById('photo-modal-actions');
+  var noFileEl = document.getElementById('photo-modal-no-file');
+  if (!modal || !img) return;
+  if (titleEl) titleEl.textContent = '🖼 참조 이미지';
+  if (actionsEl) actionsEl.style.display = 'none';
+  memo.style.display = 'none';
+  if (ref.file) {
+    if (dxfImageObjectUrl) URL.revokeObjectURL(dxfImageObjectUrl);
+    dxfImageObjectUrl = URL.createObjectURL(ref.file);
+    img.src = dxfImageObjectUrl;
+    img.style.display = 'block';
+    if (noFileEl) noFileEl.style.display = 'none';
+  } else {
+    if (dxfImageObjectUrl) { URL.revokeObjectURL(dxfImageObjectUrl); dxfImageObjectUrl = null; }
+    img.src = '';
+    img.style.display = 'none';
+    if (noFileEl) {
+      noFileEl.textContent = '이미지 파일을 찾을 수 없습니다. DXF와 같은 폴더를 선택하세요.';
+      noFileEl.style.display = 'block';
+    }
+  }
   modal.classList.add('active');
 }
 
@@ -1544,6 +1770,11 @@ function hidePhotoModal() {
   if (modal) modal.classList.remove('active');
   if (img) img.src = '';
   editingPhotoId = null;
+  editingDxfImageRef = null;
+  if (dxfImageObjectUrl) {
+    URL.revokeObjectURL(dxfImageObjectUrl);
+    dxfImageObjectUrl = null;
+  }
 }
 
 function bindPhotoModal() {

@@ -161,6 +161,8 @@
       <div class="file-list-actions">
         <label for="local-file-input" class="btn btn-secondary">로컬 DXF 선택</label>
         <input type="file" id="local-file-input" accept=".dxf">
+        <label for="folder-input" class="btn btn-secondary">폴더 선택 (DXF+이미지)</label>
+        <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none">
       </div>
       <div id="file-list" class="file-list">
         <p class="info-text">로컬 DXF 파일을 선택하세요.</p>
@@ -270,16 +272,17 @@
   </div>
   <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
 
-  <!-- 사진 보기 모달 -->
+  <!-- 사진 보기 모달 (촬영 사진 + DXF 참조 이미지 공용) -->
   <div class="modal" id="photo-modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>📷 사진</h3>
+        <h3 id="photo-modal-title">📷 사진</h3>
         <span class="close-btn" id="photo-modal-close">&times;</span>
       </div>
       <div class="photo-view-wrap"><img id="photo-modal-img" alt="사진" style="max-width:100%; max-height:50vh;"></div>
+      <div id="photo-modal-no-file" style="display:none; padding:12px; color:#666;">이미지 파일을 찾을 수 없습니다. DXF와 같은 폴더를 선택하세요.</div>
       <textarea id="photo-modal-memo" placeholder="메모" style="width:100%; min-height:60px; margin:10px 0;"></textarea>
-      <div style="display:flex; gap:10px;">
+      <div id="photo-modal-actions" style="display:flex; gap:10px;">
         <button type="button" class="btn" id="photo-modal-save">저장</button>
         <button type="button" class="btn btn-delete" id="photo-modal-delete">삭제</button>
       </div>
