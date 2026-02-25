@@ -25,6 +25,18 @@
     .app-container { display: flex; flex-direction: column; height: 100vh; }
     .screen { display: flex; flex-direction: column; height: 100vh; }
     .screen.hidden { display: none; }
+    /* VMAP 참고: 뷰어가 숨겨져 있어도 #map이 크기를 유지하도록 (지도 타일 로드 위해) */
+    #viewer-screen.hidden {
+      display: flex !important;
+      visibility: hidden;
+      pointer-events: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+    }
+    #file-list-screen { position: relative; z-index: 1; }
     .screen-header { padding: 20px; background: white; border-bottom: 1px solid #e0e0e0; }
     .screen-header h2 { font-size: 20px; margin: 0; }
     .file-list-actions { padding: 15px; background: white; display: flex; gap: 10px; border-bottom: 1px solid #e0e0e0; }
