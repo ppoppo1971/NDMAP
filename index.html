@@ -81,6 +81,7 @@
     .slide-menu {
       position: fixed; top: 0; right: -300px; width: 250px; height: 100vh; background: white;
       box-shadow: -4px 0 12px rgba(0,0,0,0.3); z-index: 1001; transition: right 0.3s ease-out; padding-top: 80px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .slide-menu.active { right: 0; }
     .slide-menu-item {
@@ -187,6 +188,7 @@
     <button class="slide-menu-item" id="menu-map-type">배경 지도</button>
     <button class="slide-menu-item" id="menu-image-size">용량조정</button>
     <button class="slide-menu-item" id="menu-export">자료 내보내기</button>
+    <button class="slide-menu-item" id="menu-delete-data">자료 삭제</button>
     <button class="slide-menu-item" id="menu-toggle-dxf-text">
       <span class="dxf-text-toggle-label">문자 숨기기</span>
       <span class="dxf-text-toggle-icon">◯</span>
@@ -212,6 +214,31 @@
           <strong>📷 개별 다운로드</strong><br>
           <span style="font-size:12px; opacity:0.8;">파일을 하나씩 순차 다운로드 (대용량·안정성 권장)</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 자료 삭제 모달 (날짜 범위로 사진·메타데이터 삭제) -->
+  <div class="modal" id="delete-data-modal">
+    <div class="modal-content" style="max-width:360px;">
+      <div class="modal-header">
+        <h3>🧹 자료 삭제</h3>
+        <span class="close-btn" id="delete-data-close">&times;</span>
+      </div>
+      <div class="info-box" style="margin-bottom:12px;">
+        선택한 날짜 범위의 사진과 메타데이터를 로컬에서 삭제합니다.<br>삭제 후 복구할 수 없습니다.
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block; margin-bottom:4px; font-size:14px;">시작 날짜</label>
+        <input type="date" id="delete-start-date" style="width:100%; padding:8px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block; margin-bottom:4px; font-size:14px;">종료 날짜</label>
+        <input type="date" id="delete-end-date" style="width:100%; padding:8px; box-sizing:border-box;">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-cancel" id="delete-data-cancel">취소</button>
+        <button type="button" class="btn" id="delete-data-confirm" style="background:#FF3B30;">삭제</button>
       </div>
     </div>
   </div>

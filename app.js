@@ -106,6 +106,15 @@ function bindUI() {
   document.getElementById('hamburger-btn').addEventListener('click', function () {
     slideMenu.classList.add('active');
     menuOverlay.classList.add('active');
+    if (typeof console !== 'undefined' && console.log) {
+      var items = document.querySelectorAll('#slide-menu .slide-menu-item');
+      var list = [];
+      for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        list.push((el.id || '(no id)') + ': ' + (el.textContent || '').trim().slice(0, 30));
+      }
+      console.log('[new_dmap] 슬라이드 메뉴 항목 (' + items.length + '개):', list);
+    }
   });
   menuOverlay.addEventListener('click', function () {
     slideMenu.classList.remove('active');
@@ -147,6 +156,9 @@ function bindUI() {
       menuOverlay.classList.remove('active');
       showDeleteDataModal();
     });
+    if (typeof console !== 'undefined' && console.log) console.log('[new_dmap] 자료 삭제 메뉴 바인딩 완료 (menu-delete-data)');
+  } else {
+    if (typeof console !== 'undefined' && console.warn) console.warn('[new_dmap] menu-delete-data 요소를 찾을 수 없음. 슬라이드 메뉴 항목 수:', document.querySelectorAll('#slide-menu .slide-menu-item').length);
   }
 
   var toggleDxfTextBtn = document.getElementById('menu-toggle-dxf-text');
