@@ -401,6 +401,12 @@ function showViewer() {
   if (fileListScreen) fileListScreen.classList.add('hidden');
   if (viewerScreen) viewerScreen.classList.remove('hidden');
   if (viewerUI) viewerUI.classList.remove('hidden');
+  // 지도가 숨겨진 화면에서 초기화되어 컨테이너가 0x0이었으므로, 표시 후 resize로 타일 로드 유도 (VMAP/ADMAP 참고)
+  if (map) {
+    requestAnimationFrame(function () {
+      google.maps.event.trigger(map, 'resize');
+    });
+  }
 }
 
 /**
