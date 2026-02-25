@@ -36,16 +36,12 @@ var editingPhotoId = null;
 var editingTextId = null;
 var imageSizeSetting = typeof localStorage !== 'undefined' ? (localStorage.getItem('dmap:imageSize') || '2MB') : '2MB';
 var exportInfo = null; // 내보내기 방식 선택 모달용 { photos, totalSizeMB }
+var mapBindingsDone = false; // ensureMap에서 map 의존 바인딩 1회만 수행
 
 /**
- * Google Maps API 로드 후 콜백
+ * Google Maps API 로드 후 콜백. 지도는 생성하지 않고 DOM/UI만 준비 (지도는 뷰어 표시 시 ensureMap에서 생성).
  */
 function initMap() {
-  var C = window.DMAP_CONFIG || {};
-  var lat0 = C.MAP_ORIGIN_LAT != null ? C.MAP_ORIGIN_LAT : 36.3;
-  var lng0 = C.MAP_ORIGIN_LNG != null ? C.MAP_ORIGIN_LNG : 127.8;
-  var blankStyle = C.BLANK_MAP_STYLE || [];
-
   fileListScreen = document.getElementById('file-list-screen');
   viewerScreen = document.getElementById('viewer-screen');
   viewerUI = document.getElementById('viewer-ui');
@@ -55,8 +51,55 @@ function initMap() {
   slideMenu = document.getElementById('slide-menu');
   menuOverlay = document.getElementById('menu-overlay');
   mapTypeSelector = document.getElementById('map-type-selector');
+  contextMenuEl = document.getElementById('context-menu');
 
-  map = new google.maps.Map(document.getElementById('map'), {
+  if (window.localStore && window.localStore.init) {
+    window.localStore.init().catch(function () {});
+  }
+  bindPhotoModal();
+  bindTextModal();
+  bindImageSizeModal();
+  bindContextMenuCloseOnMap();
+  bindUI();
+  bindDeleteDataModal();
+  console.log('new_dmap: API 로드 완료 (지도는 뷰어 표시 시 생성)');
+}
+
+/**
+ * 뷰어가 표시된 상태에서 지도가 없으면 생성하고 map 의존 바인딩 1회 수행.
+ * VMAP처럼 컨테이너가 보이는 시점에만 지도를 만들어 타일 미로드 방지.
+ */
+function ensureMap() {
+  if (map) {
+    if (!mapBindingsDone) {
+      bindMapLongPress();
+      bindContextMenu();
+      bindScaleDisplay();
+      bindDoubleTapZoom();
+      bindDxfDataLayerClick();
+      bindDxfTextModal();
+      mapBindingsDone = true;
+    }
+    return;
+  }
+  if (!window.google || !window.google.maps) {
+    console.error('new_dmap: Google Maps API가 로드되지 않았습니다. config.js API 키와 실행 환경(http 서버)을 확인하세요.');
+    return;
+  }
+  var C = window.DMAP_CONFIG || {};
+  var lat0 = C.MAP_ORIGIN_LAT != null ? C.MAP_ORIGIN_LAT : 36.3;
+  var lng0 = C.MAP_ORIGIN_LNG != null ? C.MAP_ORIGIN_LNG : 127.8;
+  var blankStyle = C.BLANK_MAP_STYLE || [];
+
+  var mapEl = document.getElementById('map');
+  if (!mapEl) {
+    console.error('new_dmap: #map 요소 없음');
+    return;
+  }
+  var rect = mapEl.getBoundingClientRect();
+  console.log('new_dmap: #map 크기 (지도 생성 시점)', rect.width, 'x', rect.height);
+
+  map = new google.maps.Map(mapEl, {
     zoom: 16,
     center: { lat: lat0, lng: lng0 },
     mapTypeControl: false,
@@ -75,23 +118,14 @@ function initMap() {
     styles: blankStyle
   });
 
-  contextMenuEl = document.getElementById('context-menu');
-  if (window.localStore && window.localStore.init) {
-    window.localStore.init().catch(function () {});
-  }
   bindMapLongPress();
   bindContextMenu();
-  bindPhotoModal();
-  bindTextModal();
-  bindImageSizeModal();
-  bindContextMenuCloseOnMap();
-  bindUI();
   bindScaleDisplay();
   bindDoubleTapZoom();
   bindDxfDataLayerClick();
   bindDxfTextModal();
-  bindDeleteDataModal();
-  console.log('new_dmap: 지도 초기화 완료 (배경 없음 기본)');
+  mapBindingsDone = true;
+  console.log('new_dmap: 지도 생성 완료 (뷰어 표시 후, 배경 없음 기본)');
 }
 
 function bindUI() {
@@ -401,7 +435,8 @@ function showViewer() {
   if (fileListScreen) fileListScreen.classList.add('hidden');
   if (viewerScreen) viewerScreen.classList.remove('hidden');
   if (viewerUI) viewerUI.classList.remove('hidden');
-  // 지도가 숨겨진 화면에서 초기화되어 컨테이너가 0x0이었으므로, 표시 후 resize로 타일 로드 유도 (VMAP/ADMAP 참고)
+  // 뷰어가 보인 뒤에만 지도 생성 (컨테이너 크기 확보 → 타일 로드 보장)
+  ensureMap();
   if (map) {
     requestAnimationFrame(function () {
       google.maps.event.trigger(map, 'resize');
@@ -527,9 +562,9 @@ function loadDxfFile(file) {
       extractConstantWidths(dxfData, text);
       dxfFileName = file.name;
       dxfFileFullName = file.name;
+      showViewer();
       applyDxfToMap();
       updateFileNameDisplay();
-      showViewer();
       // 메타데이터 로드 + 뷰 맞추기까지를 "로딩 중"으로 간주
       loadMetadataAndDisplay(dxfFileFullName).then(function () {
         fitDxfToView();
@@ -954,6 +989,9 @@ function setMapType(type) {
     map.setOptions({ styles: [] });
     map.setMapTypeId(currentMapType);
   }
+  requestAnimationFrame(function () {
+    google.maps.event.trigger(map, 'resize');
+  });
 }
 
 function getImageTargetSize() {

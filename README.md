@@ -11,7 +11,7 @@ ADMAP의 기능을 유지하면서 대용량 DXF도 부드럽게 보이도록, V
 
 ## 실행 방법
 
-1. **로컬 서버로 열기** (파일 직접 열면 CORS/스크립트 제한 가능)
+1. **반드시 HTTP 서버로 열기** (파일 직접 열기 `file://` 는 Google Maps 타일이 로드되지 않을 수 있음)
    ```bash
    cd new_dmap
    npx serve .
@@ -19,6 +19,12 @@ ADMAP의 기능을 유지하면서 대용량 DXF도 부드럽게 보이도록, V
    ```
 2. 브라우저에서 `http://localhost:3000` (또는 사용한 포트) 접속
 3. "로컬 DXF 선택"으로 DXF 파일 선택 → 지도 위에 도면 표시
+
+## 지도 타일이 안 나올 때
+
+- **실행 환경**: `file://` 가 아닌 **http://localhost** 또는 실제 도메인으로 접속했는지 확인.
+- **API 키**: config.js의 `GMAPS_API_KEY`가 유효한지, Google Cloud Console에서 Maps JavaScript API가 사용 설정·과금(필요 시)·HTTP 리퍼러 제한(사용 중이면 현재 출처 포함) 확인.
+- **콘솔**: 개발자 도구(F12) → Console에서 `new_dmap: #map 크기 (지도 생성 시점)` 로그가 0이 아닌지, `new_dmap: 지도 생성 완료` 로그가 나오는지 확인.
 
 ## 구성
 

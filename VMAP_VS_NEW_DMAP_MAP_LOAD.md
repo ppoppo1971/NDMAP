@@ -69,8 +69,26 @@
 
 ---
 
-## 5. 정리
+## 5. 지연 초기화(Lazy init) 적용
+
+- **추가 대응**: 지도 생성 시점을 **뷰어가 화면에 보인 뒤**로 미룸.
+  - API 로드 시 `initMap()` 은 DOM/UI만 준비하고 **지도를 생성하지 않음**.
+  - DXF 선택 → `showViewer()` 호출 시 뷰어 화면 표시 후 **`ensureMap()`** 에서 최초 1회만 지도 생성.
+  - 이때 **#map은 이미 보이는 상태**이므로 컨테이너 크기가 확보되어 타일이 정상 요청됨.
+- **loadDxfFile 순서**: `showViewer()` → `ensureMap()` → `applyDxfToMap()` 순으로 호출.
+- **setMapType 후**: 배경 지도 전환 시 `google.maps.event.trigger(map, 'resize')` 로 타일 갱신 유도.
+
+## 6. 다각적 점검 체크리스트
+
+| 항목 | 확인 내용 |
+|------|-----------|
+| **실행 환경** | `file://` 가 아닌 **http://localhost** 등 HTTP 서버로 열었는지 |
+| **API 키** | config.js `GMAPS_API_KEY` 유효·Maps JavaScript API 사용·리퍼러 제한(현재 출처 포함) |
+| **지도 생성 시점** | 콘솔에 `new_dmap: #map 크기 (지도 생성 시점) WxH` 가 0이 아닌지 |
+| **배경 선택** | "도로/위성/하이브리드" 선택 시 `setMapType` + resize 호출 여부 |
+
+## 7. 정리
 
 - **원인**: 지도 **컨테이너가 처음에 display: none 안에 있어 크기가 0**이었음.
-- **해결**: VMAP처럼 **숨겨진 뷰어 화면에서도 #map이 전체 뷰포트 크기를 유지**하도록 CSS 수정.
+- **해결**: (1) VMAP처럼 숨겨진 뷰어에서도 #map 크기 유지 CSS, (2) **뷰어 표시 후에만 지도 생성(ensureMap)**.
 - **KML vs DXF**: 지도 타일 미로드와는 별개이며, 좌표계도 동일하게 맞춰져 있음.
