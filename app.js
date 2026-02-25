@@ -70,7 +70,6 @@ function initMap() {
   bindPhotoModal();
   bindTextModal();
   bindImageSizeModal();
-  bindContextMenuCloseOnMap();
   bindUI();
   bindDeleteDataModal();
   console.log('new_dmap: API 로드 완료 (지도는 뷰어 표시 시 생성)');
@@ -85,6 +84,7 @@ function ensureMap() {
     if (!mapBindingsDone) {
       bindMapLongPress();
       bindContextMenu();
+      bindContextMenuCloseOnMap();
       bindScaleDisplay();
       bindDoubleTapZoom();
       bindDxfDataLayerClick();
@@ -151,6 +151,7 @@ function ensureMap() {
 
   bindMapLongPress();
   bindContextMenu();
+  bindContextMenuCloseOnMap();
   bindScaleDisplay();
   bindDoubleTapZoom();
   bindDxfDataLayerClick();
@@ -648,6 +649,46 @@ function fileBasename(pathOrName) {
   return i >= 0 ? s.slice(i + 1) : s;
 }
 
+/**
+ * DXF 원문을 1회만 파싱하고 constantWidth·IMAGE ref 추출까지 수행.
+ * 반환: { dxfData, rawImageRefs }. 오류 시 throw.
+ */
+function parseDxfTextAndBuildRefs(text) {
+  if (!text || !text.includes('SECTION') || !text.includes('ENTITIES')) {
+    throw new Error('올바른 DXF 파일 형식이 아닙니다.');
+  }
+  if (typeof DxfParser === 'undefined') {
+    throw new Error('DXF 파서 라이브러리가 로드되지 않았습니다.');
+  }
+  var parser = new DxfParser();
+  var data = parser.parseSync(text);
+  if (!data) throw new Error('DXF 파싱에 실패했습니다.');
+  if (!data.entities || data.entities.length === 0) {
+    console.warn('DXF 엔티티 없음');
+  }
+  extractConstantWidths(data, text);
+  var rawRefs = extractDxfImageRefs(text);
+  return { dxfData: data, rawImageRefs: rawRefs };
+}
+
+/**
+ * 파싱 결과를 전역에 반영하고 뷰어·지도·마커를 갱신. (로드 플로우 공통)
+ */
+function applyDxfLoadResult(dxfFileNameStr, dxfDataResult, imageRefsWithFile) {
+  dxfData = dxfDataResult;
+  dxfImageRefs = imageRefsWithFile;
+  dxfFileName = dxfFileFullName = dxfFileNameStr;
+  showViewer();
+  applyDxfToMap();
+  updateFileNameDisplay();
+  drawDxfImageMarkers();
+  loadMetadataAndDisplay(dxfFileFullName).then(function () {
+    fitDxfToView();
+  }).finally(function () {
+    setTimeout(function () { showLoading(false); }, 100);
+  });
+}
+
 function loadDxfFromFolder(files) {
   var arr = Array.from(files || []);
   var dxfFile = arr.filter(function (f) { return (f.name || '').toLowerCase().endsWith('.dxf'); })[0];
@@ -664,39 +705,17 @@ function loadDxfFromFolder(files) {
   showLoading(true);
   dxfFile.text().then(function (text) {
     try {
-      if (!text || !text.includes('SECTION') || !text.includes('ENTITIES')) {
-        throw new Error('올바른 DXF 파일 형식이 아닙니다.');
-      }
-      if (typeof DxfParser === 'undefined') {
-        throw new Error('DXF 파서 라이브러리가 로드되지 않았습니다.');
-      }
-      var parser = new DxfParser();
-      dxfData = parser.parseSync(text);
-      if (!dxfData) throw new Error('DXF 파싱에 실패했습니다.');
-      if (!dxfData.entities || dxfData.entities.length === 0) {
-        console.warn('DXF 엔티티 없음');
-      }
-      extractConstantWidths(dxfData, text);
-      var rawRefs = extractDxfImageRefs(text);
-      dxfImageRefs = rawRefs.map(function (r, idx) {
+      var result = parseDxfTextAndBuildRefs(text);
+      var imageRefsWithFile = result.rawImageRefs.map(function (r, idx) {
         var base = fileBasename(r.fileName).toLowerCase();
         var matched = fileMapByBasename[base] || fileMapByBasename[(r.fileName || '').toLowerCase()];
         return { id: 'dxfimg-' + idx, x: r.x, y: r.y, fileName: r.fileName, file: matched || null };
       });
-      dxfFileName = dxfFile.name;
-      dxfFileFullName = dxfFile.name;
-      showViewer();
-      applyDxfToMap();
-      updateFileNameDisplay();
-      drawDxfImageMarkers();
-      loadMetadataAndDisplay(dxfFileFullName).then(function () {
-        fitDxfToView();
-      }).finally(function () {
-        setTimeout(function () { showLoading(false); }, 100);
-      });
+      applyDxfLoadResult(dxfFile.name, result.dxfData, imageRefsWithFile);
     } catch (err) {
       console.error('DXF 로드 오류:', err);
       alert('DXF 파일을 여는데 실패했습니다: ' + (err.message || err));
+      showLoading(false);
     }
   }).catch(function (err) {
     showLoading(false);
@@ -710,39 +729,15 @@ function loadDxfFile(file) {
   showLoading(true);
   file.text().then(function (text) {
     try {
-      if (!text || !text.includes('SECTION') || !text.includes('ENTITIES')) {
-        throw new Error('올바른 DXF 파일 형식이 아닙니다.');
-      }
-      if (typeof DxfParser === 'undefined') {
-        throw new Error('DXF 파서 라이브러리가 로드되지 않았습니다.');
-      }
-      var parser = new DxfParser();
-      dxfData = parser.parseSync(text);
-      if (!dxfData) throw new Error('DXF 파싱에 실패했습니다.');
-      if (!dxfData.entities || dxfData.entities.length === 0) {
-        console.warn('DXF 엔티티 없음');
-      }
-      extractConstantWidths(dxfData, text);
-      var rawRefs = extractDxfImageRefs(text);
-      dxfImageRefs = rawRefs.map(function (r, idx) {
+      var result = parseDxfTextAndBuildRefs(text);
+      var imageRefsWithFile = result.rawImageRefs.map(function (r, idx) {
         return { id: 'dxfimg-' + idx, x: r.x, y: r.y, fileName: r.fileName, file: null };
       });
-      dxfFileName = file.name;
-      dxfFileFullName = file.name;
-      showViewer();
-      applyDxfToMap();
-      updateFileNameDisplay();
-      drawDxfImageMarkers();
-      // 메타데이터 로드 + 뷰 맞추기까지를 "로딩 중"으로 간주
-      loadMetadataAndDisplay(dxfFileFullName).then(function () {
-        fitDxfToView();
-      }).finally(function () {
-        // 지도 렌더링이 눈에 보이도록 약간의 여유 후 로딩 닫기
-        setTimeout(function () { showLoading(false); }, 100);
-      });
+      applyDxfLoadResult(file.name, result.dxfData, imageRefsWithFile);
     } catch (err) {
       console.error('DXF 로드 오류:', err);
       alert('DXF 파일을 여는데 실패했습니다: ' + (err.message || err));
+      showLoading(false);
     }
   }).catch(function (err) {
     showLoading(false);
@@ -1411,6 +1406,9 @@ function drawTextMarkers() {
   function TextOnlyOverlay(textsArr) {
     this.textsArr = textsArr;
     this.div = null;
+    this._drawThrottleMs = 120;
+    this._lastDrawTime = 0;
+    this._drawScheduled = false;
     this.setMap(map);
   }
   TextOnlyOverlay.prototype = new google.maps.OverlayView();
@@ -1425,6 +1423,19 @@ function drawTextMarkers() {
   };
   TextOnlyOverlay.prototype.draw = function () {
     if (!this.div || !this.getProjection) return;
+    var now = Date.now();
+    if (now - this._lastDrawTime < this._drawThrottleMs) {
+      var self = this;
+      if (!this._drawScheduled) {
+        this._drawScheduled = true;
+        setTimeout(function () {
+          self._drawScheduled = false;
+          self.draw();
+        }, self._drawThrottleMs - (now - self._lastDrawTime));
+      }
+      return;
+    }
+    this._lastDrawTime = now;
     var proj = this.getProjection();
     this.div.innerHTML = '';
     var self = this;
