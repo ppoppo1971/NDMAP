@@ -124,6 +124,26 @@ function ensureMap() {
     styles: blankStyle
   });
 
+  // VMAP 참고: 브이월드 타일 레이어 등록 (도로/위성에서 구글·브이월드 선택 가능)
+  var vworldRoadmapType = new google.maps.ImageMapType({
+    getTileUrl: function (coord, zoom) {
+      return 'https://xdworld.vworld.kr/2d/Base/service/' + zoom + '/' + coord.x + '/' + coord.y + '.png';
+    },
+    tileSize: new google.maps.Size(256, 256),
+    name: '브이월드일반',
+    maxZoom: 19
+  });
+  var vworldSatelliteType = new google.maps.ImageMapType({
+    getTileUrl: function (coord, zoom) {
+      return 'https://xdworld.vworld.kr/2d/Satellite/service/' + zoom + '/' + coord.x + '/' + coord.y + '.jpeg';
+    },
+    tileSize: new google.maps.Size(256, 256),
+    name: '브이월드영상',
+    maxZoom: 19
+  });
+  map.mapTypes.set('브이월드일반', vworldRoadmapType);
+  map.mapTypes.set('브이월드영상', vworldSatelliteType);
+
   bindMapLongPress();
   bindContextMenu();
   bindScaleDisplay();
@@ -990,6 +1010,9 @@ function setMapType(type) {
   var C = window.DMAP_CONFIG || {};
   if (currentMapType === 'none') {
     map.setOptions({ styles: C.BLANK_MAP_STYLE || [] });
+    map.setMapTypeId('roadmap');
+  } else if (currentMapType === 'roadmap') {
+    map.setOptions({ styles: C.ROAD_ONLY_STYLE || [] });
     map.setMapTypeId('roadmap');
   } else {
     map.setOptions({ styles: [] });

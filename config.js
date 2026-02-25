@@ -41,6 +41,18 @@
     { featureType: 'landscape', elementType: 'geometry', stylers: [{ visibility: 'off' }] }
   ];
 
+  // VMAP 참고: 도로(구글) 선택 시 상호·POI·라벨 숨기고 도로만 간결하게
+  var ROAD_ONLY_STYLE = [
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+    { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ visibility: 'simplified' }] }
+  ];
+
   global.DMAP_CONFIG = {
     GMAPS_API_KEY: GMAPS_API_KEY,
     DXF_CRS: DXF_CRS,
@@ -48,6 +60,7 @@
     MAP_ORIGIN_LNG: MAP_ORIGIN_LNG,
     DXF_UNITS_PER_METER: DXF_UNITS_PER_METER,
     DEFAULT_MAP_TYPE: DEFAULT_MAP_TYPE,
-    BLANK_MAP_STYLE: BLANK_MAP_STYLE
+    BLANK_MAP_STYLE: BLANK_MAP_STYLE,
+    ROAD_ONLY_STYLE: ROAD_ONLY_STYLE
   };
 })(typeof window !== 'undefined' ? window : this);
