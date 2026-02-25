@@ -74,29 +74,36 @@
     }
     .hamburger-btn {
       position: fixed; top: 20px; right: 20px; width: 45px; height: 45px; border-radius: 50%;
-      background: white; border: 2px solid #007AFF; color: #007AFF; font-size: 22px;
-      cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      background: rgba(255,255,255,0.8); border: 2px solid rgba(0,122,255,0.85); color: #007AFF; font-size: 22px;
+      cursor: pointer; box-shadow: 0 3px 9px rgba(0,0,0,0.18);
       display: flex; align-items: center; justify-content: center; z-index: 12;
     }
-    .hamburger-btn:active { background: #007AFF; color: white; }
+    .hamburger-btn:active { background: rgba(0,122,255,0.9); color: white; }
     .zoom-controls-fixed { position: fixed; bottom: 20px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 12; }
     .zoom-btn {
-      width: 45px; height: 45px; border-radius: 50%; background: white; border: 2px solid #007AFF;
+      width: 45px; height: 45px; border-radius: 50%; background: rgba(255,255,255,0.8); border: 2px solid rgba(0,122,255,0.85);
       color: #007AFF; font-size: 22px; font-weight: bold; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 9px rgba(0,0,0,0.18); display: flex; align-items: center; justify-content: center;
     }
-    .zoom-btn:active { background: #007AFF; color: white; }
+    .zoom-btn:active { background: rgba(0,122,255,0.9); color: white; }
     .scale-display {
-      position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white;
-      padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 12;
+      position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.45); color: white;
+      padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; z-index: 12;
     }
     .current-location-btn {
       position: fixed; bottom: 70px; right: 20px; width: 45px; height: 45px; border-radius: 50%;
-      background: white; border: 2px solid #007AFF; color: #007AFF; font-size: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.8);
+      border: 2px solid rgba(0,122,255,0.85);
+      box-shadow: 0 3px 9px rgba(0,0,0,0.18);
+      display: flex; align-items: center; justify-content: center;
       cursor: pointer; z-index: 12;
+      background-image: url('https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi.png');
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 24px 24px;
+      color: transparent;
     }
-    .current-location-btn:active { background: #007AFF; color: white; }
+    .current-location-btn:active { background: rgba(0,122,255,0.9); }
     /* vConsole 플로팅 배지 숨김: 콘솔은 햄버거 메뉴 > 콘솔로만 열기 */
     .vc-switch { display: none !important; }
     .slide-menu {
@@ -195,7 +202,7 @@
       <button class="zoom-btn" id="zoom-in" type="button">+</button>
       <button class="zoom-btn" id="zoom-out" type="button">−</button>
     </div>
-    <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치">⌖</button>
+    <button class="current-location-btn" id="current-location-btn" type="button" title="현재 위치"></button>
     <div class="scale-display" id="scale-display">—</div>
   </div>
 
