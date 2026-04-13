@@ -385,14 +385,19 @@ function updateScaleDisplay() {
 
 function bindScaleDisplay() {
   if (!map) return;
+  var scaleRafScheduled = false;
   google.maps.event.addListener(map, 'idle', updateScaleDisplay);
   google.maps.event.addListener(map, 'bounds_changed', function () {
-    if (scaleDisplayTimeout) clearTimeout(scaleDisplayTimeout);
-    scaleDisplayTimeout = setTimeout(updateScaleDisplay, 180);
+    if (!scaleRafScheduled) {
+      scaleRafScheduled = true;
+      requestAnimationFrame(function () {
+        scaleRafScheduled = false;
+        updateScaleDisplay();
+      });
+    }
   });
   updateScaleDisplay();
 }
-var scaleDisplayTimeout = null;
 
 /** 더블탭 시 해당 위치를 중심으로 화면 가로 폭 50m가 되도록 확대/축소 (ADMAP defaultZoomRange 50m) */
 var lastTapTime = 0;
@@ -531,9 +536,8 @@ function showViewer() {
  * DXF 원본 텍스트에서 constantWidth(그룹코드 43)를 추출하여 엔티티에 추가.
  * 파서가 constantWidth를 파싱하지 못하는 경우를 대비 (ADMAP 방식).
  */
-function extractConstantWidths(dxfData, dxfText) {
-  if (!dxfData || !dxfData.entities || !dxfText || typeof dxfText !== 'string') return;
-  var lines = dxfText.split(/\r?\n/);
+function extractConstantWidths(dxfData, lines) {
+  if (!dxfData || !dxfData.entities || !lines || !lines.length) return;
   var mapList = [];
   var inEntity = false;
   var currentLayer = '';
@@ -629,9 +633,8 @@ function extractConstantWidths(dxfData, dxfText) {
  * DXF 원문에서 IMAGE 엔티티와 IMAGEDEF 객체를 파싱해 참조 이미지 목록 반환.
  * IMAGE: 10,20 (삽입점), 340 (IMAGEDEF 핸들). IMAGEDEF: 5 (핸들), 1 (파일명).
  */
-function extractDxfImageRefs(dxfText) {
-  if (!dxfText || typeof dxfText !== 'string') return [];
-  var lines = dxfText.split(/\r?\n/).map(function (l) { return l.trim(); });
+function extractDxfImageRefs(lines) {
+  if (!lines || !lines.length) return [];
   var handleToFilename = {};
   var refs = [];
   var i, j, code, val, section, x, y, handle, defHandle, defFile, fn;
@@ -714,8 +717,9 @@ function parseDxfTextAndBuildRefs(text) {
   if (!data.entities || data.entities.length === 0) {
     console.warn('DXF 엔티티 없음');
   }
-  extractConstantWidths(data, text);
-  var rawRefs = extractDxfImageRefs(text);
+  var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); });
+  extractConstantWidths(data, lines);
+  var rawRefs = extractDxfImageRefs(lines);
   return { dxfData: data, rawImageRefs: rawRefs };
 }
 
@@ -1370,6 +1374,21 @@ function clearTextMarkers() {
   textMarkers = [];
 }
 
+var photoIconCache = {};
+function getPhotoIcon(color, sizePx) {
+  var key = color + '_' + sizePx;
+  if (photoIconCache[key]) return photoIconCache[key];
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+    '<circle cx="12" cy="12" r="10" fill="' + color + '" stroke="#FFFFFF" stroke-width="1.5"/>' +
+    '</svg>';
+  photoIconCache[key] = {
+    url: 'data:image/svg+xml,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(sizePx, sizePx),
+    anchor: new google.maps.Point(sizePx / 2, sizePx / 2)
+  };
+  return photoIconCache[key];
+}
+
 function drawPhotoMarkers() {
   clearPhotoMarkers();
   if (!map || !window.DxfToGeoJSON) return;
@@ -1387,14 +1406,7 @@ function drawPhotoMarkers() {
       markerColor = '#00C853';
       sizePx = 38;
     }
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-      '<circle cx="12" cy="12" r="10" fill="' + markerColor + '" stroke="#FFFFFF" stroke-width="1.5"/>' +
-      '</svg>';
-    var icon = {
-      url: 'data:image/svg+xml,' + encodeURIComponent(svg),
-      scaledSize: new google.maps.Size(sizePx, sizePx),
-      anchor: new google.maps.Point(sizePx / 2, sizePx / 2)
-    };
+    var icon = getPhotoIcon(markerColor, sizePx);
     var m = new google.maps.Marker({
       map: photoMarkersVisible ? map : null,
       position: pos,
@@ -1614,103 +1626,112 @@ function bindContextMenu() {
   });
 }
 
-function compressImage(dataUrl, targetSize) {
-  return new Promise(function (resolve, reject) {
-    var img = new Image();
-    img.onload = function () {
-      var maxDim = targetSize <= 500 * 1024 ? 800 : targetSize <= 1024 * 1024 ? 1200 : targetSize <= 2 * 1024 * 1024 ? 1600 : 2000;
-      var w = img.width;
-      var h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) {
-          h = Math.floor((h / w) * maxDim);
-          w = maxDim;
-        } else {
-          w = Math.floor((w / h) * maxDim);
-          h = maxDim;
-        }
-      }
-      var canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+function compressImage(file, targetSize) {
+  // createImageBitmap 지원 시 직접 사용 (메모리 효율), 미지원 시 Image+FileReader 폴백
+  var bitmapPromise;
+  if (typeof createImageBitmap === 'function') {
+    bitmapPromise = createImageBitmap(file);
+  } else {
+    bitmapPromise = new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('이미지 로드 실패')); };
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 
-      function getActualBlobSize(dataUrlStr) {
-        return fetch(dataUrlStr).then(function (r) { return r.blob(); }).then(function (blob) { return blob.size; }).catch(function () {
-          return Promise.resolve(Math.floor((dataUrlStr.length - 22) * 0.75));
+  return bitmapPromise.then(function (bitmap) {
+    var maxDim = targetSize <= 500 * 1024 ? 800 : targetSize <= 1024 * 1024 ? 1200 : targetSize <= 2 * 1024 * 1024 ? 1600 : 2000;
+    var w = bitmap.width;
+    var h = bitmap.height;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) {
+        h = Math.floor((h / w) * maxDim);
+        w = maxDim;
+      } else {
+        w = Math.floor((w / h) * maxDim);
+        h = maxDim;
+      }
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    var adjustedTarget = targetSize * 2.5;
+    var pixelCount = w * h;
+    var quality = Math.pow(adjustedTarget / (pixelCount * 0.25), 1 / 1.6);
+    quality = Math.max(0.4, Math.min(0.95, quality));
+    if (targetSize <= 500 * 1024) quality *= 1.2;
+    else if (targetSize <= 1024 * 1024) quality *= 1.15;
+    else quality *= 1.1;
+    quality = Math.max(0.4, Math.min(0.95, quality));
+
+    // canvas.toBlob: 비동기 네이티브 Blob 생성 (toDataURL 대비 메모리 33% 절감, CPU 비차단)
+    function toBlob(q) {
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) { resolve(blob); }, 'image/jpeg', q);
+      });
+    }
+
+    function cleanup() {
+      if (bitmap.close) bitmap.close(); // ImageBitmap만 close 가능
+      ctx = null;
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+
+    return toBlob(quality).then(function (firstBlob) {
+      var compressedBlob = firstBlob;
+      var minQ = 0.3, maxQ = 0.95, q = quality;
+      var tolerance = 0.12, maxIter = 3, iter = 0;
+
+      function next() {
+        var diffRatio = Math.abs(compressedBlob.size - targetSize) / targetSize;
+        if (diffRatio <= tolerance || iter >= maxIter) {
+          if (compressedBlob.size < targetSize * 0.7) {
+            // 압축 결과가 목표보다 많이 작으면 해상도 업스케일
+            var scaleFactor = Math.sqrt(targetSize / compressedBlob.size) * 1.05;
+            var nw = Math.floor(w * scaleFactor);
+            var nh = Math.floor(h * scaleFactor);
+            canvas.width = nw;
+            canvas.height = nh;
+            ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, nw, nh);
+            ctx.drawImage(bitmap, 0, 0, nw, nh);
+            var nq = Math.pow(adjustedTarget / (nw * nh * 0.25), 1 / 1.6);
+            nq = Math.max(0.4, Math.min(0.9, nq));
+            return toBlob(nq).then(function (upscaledBlob) {
+              cleanup();
+              return upscaledBlob;
+            });
+          }
+          cleanup();
+          return Promise.resolve(compressedBlob);
+        }
+        iter++;
+        if (compressedBlob.size > targetSize) {
+          maxQ = q;
+          q = (minQ + q) / 2;
+        } else {
+          minQ = q;
+          q = (q + maxQ) / 2;
+        }
+        q = Math.max(0.3, Math.min(0.95, q));
+        return toBlob(q).then(function (newBlob) {
+          compressedBlob = newBlob;
+          return next();
         });
       }
 
-      var adjustedTarget = targetSize * 2.5;
-      var pixelCount = w * h;
-      var quality = Math.pow(adjustedTarget / (pixelCount * 0.25), 1 / 1.6);
-      quality = Math.max(0.4, Math.min(0.95, quality));
-      if (targetSize <= 500 * 1024) quality *= 1.2;
-      else if (targetSize <= 1024 * 1024) quality *= 1.15;
-      else quality *= 1.1;
-      quality = Math.max(0.4, Math.min(0.95, quality));
-
-      function tryCompress(q) {
-        var data = canvas.toDataURL('image/jpeg', q);
-        return getActualBlobSize(data).then(function (size) { return { data: data, size: size }; });
-      }
-
-      tryCompress(quality).then(function (first) {
-        var compressedData = first.data;
-        var compressedSize = first.size;
-        var minQ = 0.3;
-        var maxQ = 0.95;
-        var q = quality;
-        var tolerance = 0.12;
-        var maxIter = 3;
-        var iter = 0;
-        function next() {
-          var diffRatio = Math.abs(compressedSize - targetSize) / targetSize;
-          if (diffRatio <= tolerance || iter >= maxIter) {
-            if (compressedSize < targetSize * 0.7) {
-              var scaleFactor = Math.sqrt(targetSize / compressedSize) * 1.05;
-              var nw = Math.floor(w * scaleFactor);
-              var nh = Math.floor(h * scaleFactor);
-              canvas.width = nw;
-              canvas.height = nh;
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(img, 0, 0, nw, nh);
-              var nq = Math.pow(adjustedTarget / (nw * nh * 0.25), 1 / 1.6);
-              nq = Math.max(0.4, Math.min(0.9, nq));
-              return tryCompress(nq).then(function (r) {
-                ctx = null;
-                canvas.width = 0;
-                canvas.height = 0;
-                resolve(r.data);
-              });
-            }
-            ctx = null;
-            canvas.width = 0;
-            canvas.height = 0;
-            resolve(compressedData);
-            return;
-          }
-          iter++;
-          if (compressedSize > targetSize) {
-            maxQ = q;
-            q = (minQ + q) / 2;
-          } else {
-            minQ = q;
-            q = (q + maxQ) / 2;
-          }
-          q = Math.max(0.3, Math.min(0.95, q));
-          compressedData = canvas.toDataURL('image/jpeg', q);
-          getActualBlobSize(compressedData).then(function (size) {
-            compressedSize = size;
-            next();
-          });
-        }
-        next();
-      });
-    };
-    img.onerror = function () { reject(new Error('이미지 로드 실패')); };
-    img.src = dataUrl;
+      return next();
+    });
   });
 }
 
@@ -1718,36 +1739,30 @@ function addPhotoAtPosition(xy, file) {
   if (!dxfFileFullName || !window.localStore) return;
   var id = 'photo-' + Date.now();
   var targetSize = getImageTargetSize();
-  var reader = new FileReader();
-  reader.onload = function () {
-    var dataUrl = reader.result;
-    function finish(useDataUrl) {
-      var blob = window.localStore.dataUrlToBlob(useDataUrl);
-      var photo = {
-        id: id, x: xy.x, y: xy.y, width: 1, height: 1,
-        blob: blob, memo: '', fileName: generatePhotoFileName(),
-        createdAt: new Date().toISOString()
-      };
-      photos.push(photo);
-      window.localStore.savePhoto(dxfFileFullName, photo).then(function () {
-        drawPhotoMarkers();
-        pendingAddPosition = null;
-      }).catch(function (err) {
-        console.error('사진 저장 실패:', err);
-        alert('사진 저장에 실패했습니다. 다시 시도해 주세요.');
-      });
-    }
-    if (targetSize != null) {
-      compressImage(dataUrl, targetSize).then(function (compressed) {
-        finish(compressed);
-      }).catch(function () {
-        finish(dataUrl);
-      });
-    } else {
-      finish(dataUrl);
-    }
-  };
-  reader.readAsDataURL(file);
+
+  function finish(blob) {
+    var photo = {
+      id: id, x: xy.x, y: xy.y, width: 1, height: 1,
+      blob: blob, memo: '', fileName: generatePhotoFileName(),
+      createdAt: new Date().toISOString()
+    };
+    photos.push(photo);
+    window.localStore.savePhoto(dxfFileFullName, photo).then(function () {
+      drawPhotoMarkers();
+      pendingAddPosition = null;
+    }).catch(function (err) {
+      console.error('사진 저장 실패:', err);
+      alert('사진 저장에 실패했습니다. 다시 시도해 주세요.');
+    });
+  }
+
+  if (targetSize != null) {
+    compressImage(file, targetSize).then(finish).catch(function () {
+      finish(file); // File은 Blob을 상속하므로 직접 저장 가능
+    });
+  } else {
+    finish(file); // 원본 모드: File(Blob)을 변환 없이 직접 저장
+  }
 }
 
 function addTextAtPosition(xy, textStr) {
@@ -1787,8 +1802,11 @@ function showPhotoModal(photoId) {
   memo.value = p.memo || '';
   img.style.display = 'block';
   img.src = '';
-  window.localStore.getPhotoDataUrl(photoId).then(function (url) {
-    img.src = url || '';
+  window.localStore.getPhotoById(photoId).then(function (record) {
+    if (record && record.blob) {
+      dxfImageObjectUrl = URL.createObjectURL(record.blob);
+      img.src = dxfImageObjectUrl;
+    }
   });
   modal.classList.add('active');
 }
