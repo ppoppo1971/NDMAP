@@ -20,7 +20,7 @@
 
   var proj4Defined = false;
   function ensureProj4Defs() {
-    if (proj4Defined || typeof proj4 === 'undefined') return;
+    if (typeof proj4 === 'undefined') return;
     proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
     proj4.defs('EPSG:5186', '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +units=m +no_defs');
     proj4.defs('EPSG:5181', '+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +units=m +no_defs');
@@ -38,7 +38,7 @@
     }
     if (dxfCrs && typeof proj4 !== 'undefined') {
       try {
-        ensureProj4Defs();
+        if (!proj4Defined) ensureProj4Defs();
         var out = proj4(dxfCrs, 'EPSG:4326', [x, y]);
         return out && out.length >= 2 ? [out[0], out[1]] : null;
       } catch (err) {
@@ -63,7 +63,7 @@
     }
     if (dxfCrs && typeof proj4 !== 'undefined') {
       try {
-        ensureProj4Defs();
+        if (!proj4Defined) ensureProj4Defs();
         var out = proj4('EPSG:4326', dxfCrs, [lng, lat]);
         return out && out.length >= 2 ? { x: out[0], y: out[1] } : null;
       } catch (err) {
@@ -126,27 +126,42 @@
     var color = null;
     if (entity.colorIndex === 256 || entity.colorIndex === undefined) {
       if (entity.layer && dxfData && dxfData.tables) {
-        var layersObj = dxfData.tables.layers || dxfData.tables.layer;
-        var layer = null;
-        if (layersObj) {
-          if (!Array.isArray(layersObj) && typeof layersObj === 'object' && layersObj[entity.layer]) {
-            layer = layersObj[entity.layer];
-          }
-          if (!layer && layersObj.layers) {
-            if (Array.isArray(layersObj.layers)) {
-              for (var i = 0; i < layersObj.layers.length; i++) {
-                if (layersObj.layers[i].name === entity.layer) { layer = layersObj.layers[i]; break; }
-              }
+        if (!dxfData._layerCacheBuilt) {
+          var cache = {};
+          var layersObj = dxfData.tables.layers || dxfData.tables.layer;
+          if (layersObj) {
+            var list = [];
+            if (Array.isArray(layersObj)) {
+              list = layersObj;
+            } else if (layersObj.layers && Array.isArray(layersObj.layers)) {
+              list = layersObj.layers;
             } else {
-              layer = layersObj.layers[entity.layer];
+              var keys = Object.keys(layersObj);
+              for (var c = 0; c < keys.length; c++) {
+                var k = keys[c];
+                if (k === 'layers') continue;
+                if (layersObj[k] && typeof layersObj[k] === 'object' && layersObj[k].name) {
+                  cache[layersObj[k].name] = layersObj[k];
+                } else if (layersObj[k] && typeof layersObj[k] === 'object') {
+                  cache[k] = layersObj[k];
+                }
+              }
+              if (layersObj.layers && typeof layersObj.layers === 'object' && !Array.isArray(layersObj.layers)) {
+                var lKeys = Object.keys(layersObj.layers);
+                for (var d = 0; d < lKeys.length; d++) {
+                  cache[lKeys[d]] = layersObj.layers[lKeys[d]];
+                }
+              }
+            }
+            for (var i = 0; i < list.length; i++) {
+              if (list[i] && list[i].name) cache[list[i].name] = list[i];
             }
           }
-          if (!layer && Array.isArray(layersObj)) {
-            for (var j = 0; j < layersObj.length; j++) {
-              if (layersObj[j].name === entity.layer) { layer = layersObj[j]; break; }
-            }
-          }
+          dxfData._layerCache = cache;
+          dxfData._layerCacheBuilt = true;
         }
+
+        var layer = dxfData._layerCache[entity.layer];
         if (layer) {
           if (layer.colorIndex !== undefined && layer.colorIndex != null) {
             color = aciToHex(layer.colorIndex);
@@ -380,15 +395,7 @@
    * 블록 내부 점(블록 좌표)을 INSERT 변환 후 세계 좌표로 옮긴 뒤 [lng, lat] 반환
    * ADMAP 변환 순서: 기준점 보정 → scale → rotate → insert 위치
    */
-  function blockPointToLngLat(bx, by, insertPos, blockBase, xScale, yScale, rotation) {
-    var dx = (bx - blockBase.x) * xScale;
-    var dy = (by - blockBase.y) * yScale;
-    var rx = dx * Math.cos(rotation) - dy * Math.sin(rotation);
-    var ry = dx * Math.sin(rotation) + dy * Math.cos(rotation);
-    var wx = rx + insertPos.x;
-    var wy = ry + insertPos.y;
-    return pt(wx, wy);
-  }
+  // blockPointToLngLat 함수 삭제 (insertToFeatures 내부 구현으로 대체됨)
 
   /** 블록 내부 엔티티 하나를 변환된 좌표로 GeoJSON Feature로 만듦 (tf(bx,by) → [lng,lat]) */
   function blockEntityToFeature(blockEntity, tf, dxfData) {
@@ -499,8 +506,19 @@
     var xScale = entity.xScale != null ? entity.xScale : 1;
     var yScale = entity.yScale != null ? entity.yScale : 1;
     var rotation = entity.rotation != null ? entity.rotation : 0;
+    
+    // 블록 회전 삼각함수 결과 미리 계산 (엔티티 수백개 순회 최적화)
+    var cosR = Math.cos(rotation);
+    var sinR = Math.sin(rotation);
+
     function tf(bx, by) {
-      return blockPointToLngLat(bx, by, insertPos, blockBase, xScale, yScale, rotation);
+      var dx = (bx - blockBase.x) * xScale;
+      var dy = (by - blockBase.y) * yScale;
+      var rx = dx * cosR - dy * sinR;
+      var ry = dx * sinR + dy * cosR;
+      var wx = rx + insertPos.x;
+      var wy = ry + insertPos.y;
+      return pt(wx, wy);
     }
     var features = [];
     for (var e = 0; e < block.entities.length; e++) {

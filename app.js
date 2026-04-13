@@ -67,7 +67,7 @@ function initMap() {
   }
 
   if (window.localStore && window.localStore.init) {
-    window.localStore.init().catch(function () {});
+    window.localStore.init().catch(function () { });
   }
   bindPhotoModal();
   bindTextModal();
@@ -597,15 +597,27 @@ function extractConstantWidths(dxfData, lines) {
     }
   }
   pushCurrent();
+  var mapListByLayerType = {};
+  for (var idx = 0; idx < mapList.length; idx++) {
+    var item = mapList[idx];
+    item.globalIndex = idx;
+    var key = item.layer + "_" + item.type;
+    if (!mapListByLayerType[key]) mapListByLayerType[key] = [];
+    mapListByLayerType[key].push(item);
+  }
+
   var mapIndex = 0;
   dxfData.entities.forEach(function (entity) {
     if (entity.type !== 'LWPOLYLINE' && entity.type !== 'POLYLINE') return;
     if (entity.constantWidth !== undefined && entity.constantWidth !== null) return;
+    
+    var group = mapListByLayerType[entity.layer + "_" + entity.type];
+    if (!group || group.length === 0) return;
+
     var best = null;
     var bestScore = -1;
-    for (var k = 0; k < mapList.length; k++) {
-      var item = mapList[k];
-      if (item.type !== entity.type || item.layer !== entity.layer) continue;
+    for (var k = 0; k < group.length; k++) {
+      var item = group[k];
       var score = 0;
       if (entity.vertices && entity.vertices.length > 0 && item.firstVertex) {
         var v0 = entity.vertices[0];
@@ -618,13 +630,13 @@ function extractConstantWidths(dxfData, lines) {
         }
       }
       if (score === 0) {
-        score = 100 - Math.abs(k - mapIndex);
+        score = 100 - Math.abs(item.globalIndex - mapIndex);
         if (score > bestScore) { best = item; bestScore = score; }
       }
     }
     if (best) {
       entity.constantWidth = best.constantWidth;
-      mapIndex = mapList.indexOf(best) + 1;
+      mapIndex = best.globalIndex + 1;
     }
   });
 }
@@ -917,7 +929,7 @@ function deleteDataForProject() {
     return;
   }
   if (!confirm('현재 도면의 모든 사진, 메모, 텍스트 데이터를 삭제하시겠습니까?\n이 작업은 복구할 수 없습니다.')) return;
-  
+
   var beforeTextCount = texts.length;
   window.localStore.deleteProjectData(dxfFileFullName).then(function (deletedPhotoCount) {
     texts = [];
@@ -926,7 +938,7 @@ function deleteDataForProject() {
     drawTextMarkers();
     hideDeleteDataModal();
     hidePhotoModal();
-    
+
     if (deletedPhotoCount === 0 && beforeTextCount === 0) {
       alert('삭제할 데이터가 없습니다.');
     } else {
@@ -959,7 +971,7 @@ function toggleVConsole() {
     try {
       console.log('[new_dmap] vConsole 토글됨');
       console.log(buildConsoleReport());
-    } catch (e) {}
+    } catch (e) { }
     return;
   }
   var vc = window.vConsole || (typeof vConsole !== 'undefined' ? vConsole : null);
@@ -973,7 +985,7 @@ function toggleVConsole() {
       try {
         console.log('[new_dmap] vConsole 열림');
         console.log(buildConsoleReport());
-      } catch (e) {}
+      } catch (e) { }
     }
   } else {
     console.warn('[new_dmap] vConsole이 로드되지 않았습니다. index.html에 vConsole 스크립트를 추가하세요.');
@@ -1091,7 +1103,7 @@ function buildConsoleReport() {
   var reportText = lines.join('\n');
   try {
     console.log('[new_dmap 콘솔 보고서]\n' + reportText);
-  } catch (e) {}
+  } catch (e) { }
   return reportText;
 }
 
@@ -1439,7 +1451,7 @@ function drawTextMarkers() {
     this.div.style.pointerEvents = 'none';
     this.div.style.left = '0';
     this.div.style.top = '0';
-    
+
     var self = this;
     this.textsArr.forEach(function (t) {
       var pos = dxfToLatLng(t.x, t.y);
