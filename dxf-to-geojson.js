@@ -471,8 +471,7 @@
         if (!c1) return null;
         return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
       case 'TEXT':
-      case 'MTEXT':
-      case 'INSERT': {
+      case 'MTEXT': {
         // ADMAP createSvgText: startPoint || position
         var bp = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
         if (!bp || typeof bp.x !== 'number' || typeof bp.y !== 'number') return null;
@@ -489,41 +488,60 @@
     }
   }
 
-  /** INSERT 엔티티: 블록이 있으면 블록 내부 도형을 전개해 여러 Feature로 반환, 없으면 위치만 Point 한 개 */
-  function insertToFeatures(entity, dxfData) {
-    var entityPos = entity.position || entity.insertionPoint || entity.insert;
-    if (!entityPos || typeof entityPos.x !== 'number' || typeof entityPos.y !== 'number' || !entity.name) {
-      var single = positionToFeature(entity, getEntityColor(entity, dxfData));
-      return single ? [single] : [];
+  /** INSERT 엔티티: 중첩 블록 지원 및 각도(라디안) 변환을 적용하여 내부 도형을 Feature로 전개 */
+  function insertToFeatures(entity, dxfData, parentTf) {
+    if (!parentTf) parentTf = pt; // WCS -> GeoJSON 좌표계 변환 기본값
+
+    var entityPos = entity.position || entity.insertionPoint || entity.insert || {x:0, y:0};
+    if (typeof entityPos.x !== 'number' || typeof entityPos.y !== 'number' || !entity.name) {
+      var bp1 = parentTf(entityPos.x, entityPos.y);
+      if (!bp1) return [];
+      var sc1 = getEntityColor(entity, dxfData);
+      var text1 = entity.text || entity.value || entity.string || '';
+      return [{ type: 'Feature', geometry: { type: 'Point', coordinates: bp1 }, properties: { layer: entity.layer || '', text: String(text1).trim(), strokeColor: sc1 } }];
     }
+    
     var block = dxfData && dxfData.blocks && dxfData.blocks[entity.name];
     if (!block || !block.entities || block.entities.length === 0) {
-      var fe = positionToFeature(entity, getEntityColor(entity, dxfData));
-      return fe ? [fe] : [];
+      var bp2 = parentTf(entityPos.x, entityPos.y);
+      if (!bp2) return [];
+      var sc2 = getEntityColor(entity, dxfData);
+      var text2 = entity.text || entity.value || entity.string || '';
+      return [{ type: 'Feature', geometry: { type: 'Point', coordinates: bp2 }, properties: { layer: entity.layer || '', text: String(text2).trim(), strokeColor: sc2 } }];
     }
+
     var insertPos = entityPos;
     var blockBase = (block.position != null) ? { x: block.position.x, y: block.position.y } : { x: 0, y: 0 };
     var xScale = entity.xScale != null ? entity.xScale : 1;
     var yScale = entity.yScale != null ? entity.yScale : 1;
-    var rotation = entity.rotation != null ? entity.rotation : 0;
     
-    // 블록 회전 삼각함수 결과 미리 계산 (엔티티 수백개 순회 최적화)
-    var cosR = Math.cos(rotation);
-    var sinR = Math.sin(rotation);
+    // 블록 회전 오토캐드 DXF 방식(Degree)을 JavaScript 표고연산(Radian)으로 맞춰서 계산
+    var rotationDeg = entity.rotation != null ? entity.rotation : 0;
+    var rotationRad = rotationDeg * Math.PI / 180;
+    var cosR = Math.cos(rotationRad);
+    var sinR = Math.sin(rotationRad);
 
-    function tf(bx, by) {
+    var compositeTf = function(bx, by) {
       var dx = (bx - blockBase.x) * xScale;
       var dy = (by - blockBase.y) * yScale;
       var rx = dx * cosR - dy * sinR;
       var ry = dx * sinR + dy * cosR;
       var wx = rx + insertPos.x;
       var wy = ry + insertPos.y;
-      return pt(wx, wy);
+      return parentTf(wx, wy); // 부모 좌표계로 한 번 더 변환 (중첩 블록/전역 WCS)
     }
+
     var features = [];
     for (var e = 0; e < block.entities.length; e++) {
-      var f = blockEntityToFeature(block.entities[e], tf, dxfData);
-      if (f) features.push(f);
+      var child = block.entities[e];
+      var bt = String(child.type).toUpperCase();
+      if (bt === 'INSERT') {
+        var childFeatures = insertToFeatures(child, dxfData, compositeTf);
+        for (var c = 0; c < childFeatures.length; c++) features.push(childFeatures[c]);
+      } else {
+        var f = blockEntityToFeature(child, compositeTf, dxfData);
+        if (f) features.push(f);
+      }
     }
     return features;
   }
