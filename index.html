@@ -323,27 +323,19 @@
     </div>
   </div>
 
-  <!-- 자료 삭제 모달 (날짜 범위로 사진·메타데이터 삭제) -->
+  <!-- 자료 삭제 모달 (현재 도면의 모든 데이터 일괄 삭제) -->
   <div class="modal" id="delete-data-modal">
     <div class="modal-content" style="max-width:360px;">
       <div class="modal-header">
         <h3>🧹 자료 삭제</h3>
         <span class="close-btn" id="delete-data-close">&times;</span>
       </div>
-      <div class="info-box" style="margin-bottom:12px;">
-        선택한 날짜 범위의 사진과 메타데이터를 로컬에서 삭제합니다.<br>삭제 후 복구할 수 없습니다.
-      </div>
-      <div style="margin-bottom:10px;">
-        <label style="display:block; margin-bottom:4px; font-size:14px;">시작 날짜</label>
-        <input type="date" id="delete-start-date" style="width:100%; padding:8px; box-sizing:border-box;">
-      </div>
-      <div style="margin-bottom:16px;">
-        <label style="display:block; margin-bottom:4px; font-size:14px;">종료 날짜</label>
-        <input type="date" id="delete-end-date" style="width:100%; padding:8px; box-sizing:border-box;">
+      <div class="info-box" style="margin-bottom:20px;">
+        현재 도면과 매핑된 <strong>모든 데이터(사진, 메모, 텍스트)</strong>를 로컬에서 일괄 삭제합니다.<br>삭제 후 복구할 수 없습니다.
       </div>
       <div style="display:flex; gap:10px;">
         <button type="button" class="btn btn-cancel" id="delete-data-cancel">취소</button>
-        <button type="button" class="btn" id="delete-data-confirm" style="background:#FF3B30;">삭제</button>
+        <button type="button" class="btn" id="delete-data-confirm" style="background:#FF3B30;">일괄 삭제</button>
       </div>
     </div>
   </div>

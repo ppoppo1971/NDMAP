@@ -133,21 +133,33 @@
     });
   }
 
-  function deletePhotosByDateRange(dxfFile, startMs, endMs) {
+  function deleteProjectData(dxfFile) {
     return loadPhotos(dxfFile).then(function (photos) {
-      var toDelete = photos.filter(function (p) {
-        if (!p.createdAt) return false;
-        var ms = new Date(p.createdAt).getTime();
-        return ms >= startMs && ms <= endMs;
-      });
-      if (toDelete.length === 0) return Promise.resolve([]);
+      if (!photos) photos = [];
       return getDb().then(function (db) {
         return new Promise(function (resolve, reject) {
-          var tx = db.transaction(PHOTO_STORE, 'readwrite');
-          var store = tx.objectStore(PHOTO_STORE);
-          toDelete.forEach(function (p) { store.delete(String(p.id)); });
-          tx.oncomplete = function () { resolve(toDelete.map(function (p) { return p.id; })); };
-          tx.onerror = function () { reject(tx.error); };
+          // 1. PHOTO_STORE에서 사진 일괄 삭제
+          var tx1 = db.transaction(PHOTO_STORE, 'readwrite');
+          var store1 = tx1.objectStore(PHOTO_STORE);
+          photos.forEach(function (p) { store1.delete(String(p.id)); });
+          
+          tx1.oncomplete = function () {
+            // 2. PROJECT_STORE에서 텍스트 배열 비우기
+            var tx2 = db.transaction(PROJECT_STORE, 'readwrite');
+            var store2 = tx2.objectStore(PROJECT_STORE);
+            var req = store2.get(dxfFile);
+            req.onsuccess = function () {
+              var project = req.result;
+              if (project) {
+                project.texts = [];
+                project.lastModified = new Date().toISOString();
+                store2.put(project);
+              }
+            };
+            tx2.oncomplete = function () { resolve(photos.length); };
+            tx2.onerror = function () { reject(tx2.error); };
+          };
+          tx1.onerror = function () { reject(tx1.error); };
         });
       });
     });
@@ -405,7 +417,7 @@
     getPhotoById: getPhotoById,
     updatePhotoMemo: updatePhotoMemo,
     deletePhoto: deletePhoto,
-    deletePhotosByDateRange: deletePhotosByDateRange,
+    deleteProjectData: deleteProjectData,
     dataUrlToBlob: dataUrlToBlob,
     exportProjectZip: exportProjectZip,
     exportProjectSequential: exportProjectSequential,
