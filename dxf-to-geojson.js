@@ -261,9 +261,9 @@
   }
 
   function lineToFeature(entity, strokeColor, thick) {
-    var sp = entity.startPoint;
-    var ep = entity.endPoint;
-    if (!sp || !ep) return null;
+    var sp = entity.startPoint || (entity.vertices && entity.vertices[0]);
+    var ep = entity.endPoint || (entity.vertices && entity.vertices[1]);
+    if (!sp || !ep || typeof sp.x !== 'number' || typeof ep.x !== 'number') return null;
     var c1 = pt(sp.x, sp.y);
     var c2 = pt(ep.x, ep.y);
     if (!c1 || !c2) return null;
@@ -327,14 +327,19 @@
     var cx = entity.center && entity.center.x;
     var cy = entity.center && entity.center.y;
     var r = entity.radius;
-    var startAngle = entity.startAngle != null ? entity.startAngle * Math.PI / 180 : 0;
-    var endAngle = entity.endAngle != null ? entity.endAngle * Math.PI / 180 : 2 * Math.PI;
+    // dxf-parser가 이미 라디안으로 변환하여 출력하므로 추가 변환 불필요
+    var startAngle = entity.startAngle != null ? entity.startAngle : 0;
+    var endAngle = entity.endAngle != null ? entity.endAngle : 2 * Math.PI;
     if (typeof cx !== 'number' || typeof cy !== 'number' || typeof r !== 'number' || r <= 0) return null;
-    var segments = Math.max(8, Math.min(64, Math.ceil(Math.abs(endAngle - startAngle) / (Math.PI / 16))));
+    
+    var da = endAngle - startAngle;
+    while (da < 0) da += 2 * Math.PI;
+    var segments = Math.max(8, Math.min(64, Math.ceil(da / (Math.PI / 16))));
+    
     var coords = [];
     for (var i = 0; i <= segments; i++) {
       var t = i / segments;
-      var angle = startAngle + t * (endAngle - startAngle);
+      var angle = startAngle + t * da;
       var ll = pt(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
       if (ll) coords.push(ll);
     }
@@ -358,9 +363,24 @@
     };
   }
 
+  /**
+   * TEXT/MTEXT/INSERT 등 위치 기반 엔티티를 GeoJSON Point로 변환
+   * TEXT 정렬이 중앙/오른쪽 등 비기본(halign||valign)이면
+   * 실제 표시 위치인 endPoint(Group 11)를 우선 사용한다.
+   */
+  function getTextPosition(entity) {
+    var t = String(entity.type || '').toUpperCase();
+    if (t === 'TEXT') {
+      var hasAlign = (entity.halign && entity.halign !== 0) || (entity.valign && entity.valign !== 0);
+      if (hasAlign && entity.endPoint && typeof entity.endPoint.x === 'number' && typeof entity.endPoint.y === 'number') {
+        return entity.endPoint;
+      }
+    }
+    return entity.startPoint || entity.position || entity.insertionPoint || entity.insert;
+  }
+
   function positionToFeature(entity, strokeColor) {
-    // ADMAP createSvgText와 동일하게 startPoint 우선 사용
-    var pos = entity.startPoint || entity.position || entity.insertionPoint || entity.insert;
+    var pos = getTextPosition(entity);
     if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
     var ll = pt(pos.x, pos.y);
     if (!ll) return null;
@@ -406,8 +426,11 @@
     var bt = String(blockEntity.type).toUpperCase();
     switch (bt) {
       case 'LINE':
-        c1 = blockEntity.startPoint && tf(blockEntity.startPoint.x, blockEntity.startPoint.y);
-        c2 = blockEntity.endPoint && tf(blockEntity.endPoint.x, blockEntity.endPoint.y);
+        var sp = blockEntity.startPoint || (blockEntity.vertices && blockEntity.vertices[0]);
+        var ep = blockEntity.endPoint || (blockEntity.vertices && blockEntity.vertices[1]);
+        if (!sp || !ep || typeof sp.x !== 'number' || typeof ep.x !== 'number') return null;
+        c1 = tf(sp.x, sp.y);
+        c2 = tf(ep.x, ep.y);
         if (!c1 || !c2) return null;
         return { type: 'Feature', geometry: { type: 'LineString', coordinates: [c1, c2] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, thick: thick } };
       case 'LWPOLYLINE':
@@ -439,18 +462,23 @@
         if (coords.length < 4) return null;
         return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor, fillColor: strokeColor, thick: thick } };
       case 'ARC':
-        cx = blockEntity.center && blockEntity.center.x;
-        cy = blockEntity.center && blockEntity.center.y;
-        r = blockEntity.radius;
-        var startAngle = blockEntity.startAngle != null ? blockEntity.startAngle * Math.PI / 180 : 0;
-        var endAngle = blockEntity.endAngle != null ? blockEntity.endAngle * Math.PI / 180 : 2 * Math.PI;
+        var cx = blockEntity.center && blockEntity.center.x;
+        var cy = blockEntity.center && blockEntity.center.y;
+        var r = blockEntity.radius;
+        // dxf-parser가 이미 라디안으로 변환하여 출력하므로 추가 변환 불필요
+        var startAngle = blockEntity.startAngle != null ? blockEntity.startAngle : 0;
+        var endAngle = blockEntity.endAngle != null ? blockEntity.endAngle : 2 * Math.PI;
         if (typeof cx !== 'number' || typeof cy !== 'number' || typeof r !== 'number' || r <= 0) return null;
-        var segs = Math.max(8, Math.min(64, Math.ceil(Math.abs(endAngle - startAngle) / (Math.PI / 16))));
+        
+        var da = endAngle - startAngle;
+        while (da < 0) da += 2 * Math.PI;
+        var segs = Math.max(8, Math.min(64, Math.ceil(da / (Math.PI / 16))));
+        
         coords = [];
         for (var j = 0; j <= segs; j++) {
           var t = j / segs;
-          a = startAngle + t * (endAngle - startAngle);
-          ll = tf(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          var a = startAngle + t * da;
+          var ll = tf(cx + r * Math.cos(a), cy + r * Math.sin(a));
           if (ll) coords.push(ll);
         }
         if (coords.length < 2) return null;
@@ -472,8 +500,18 @@
         return { type: 'Feature', geometry: { type: 'Point', coordinates: c1 }, properties: { layer: blockEntity.layer || '', strokeColor: strokeColor } };
       case 'TEXT':
       case 'MTEXT': {
-        // ADMAP createSvgText: startPoint || position
-        var bp = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+        // TEXT 정렬이 비기본(중앙/오른쪽 등)이면 endPoint가 실제 표시 위치
+        var bp;
+        if (bt === 'TEXT') {
+          var hasAlign = (blockEntity.halign && blockEntity.halign !== 0) || (blockEntity.valign && blockEntity.valign !== 0);
+          if (hasAlign && blockEntity.endPoint && typeof blockEntity.endPoint.x === 'number' && typeof blockEntity.endPoint.y === 'number') {
+            bp = blockEntity.endPoint;
+          } else {
+            bp = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+          }
+        } else {
+          bp = blockEntity.startPoint || blockEntity.position || blockEntity.insertionPoint || blockEntity.insert;
+        }
         if (!bp || typeof bp.x !== 'number' || typeof bp.y !== 'number') return null;
         c1 = tf(bp.x, bp.y);
         if (!c1) return null;
