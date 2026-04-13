@@ -13,6 +13,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>new_dmap - 도면 뷰어</title>
   <style>
+    /* 구글 지도 하단 UI (단축키, 로고, 저작권, 약관 등) 강제 숨김 */
+    .gmnoprint, .gm-style-cc { display: none !important; }
+    a[href^="https://maps.google.com/maps"], a[href^="http://maps.google.com/maps"], a[title="Click to see this area on Google Maps"] { display: none !important; }
+    button[aria-label="Keyboard shortcuts"], button[aria-label="키보드 단축키"], button[title="Keyboard shortcuts"], button[title="키보드 단축키"] { display: none !important; }
+
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
       width: 100%;

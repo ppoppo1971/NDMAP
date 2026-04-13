@@ -1416,68 +1416,68 @@ function drawTextMarkers() {
   function TextOnlyOverlay(textsArr) {
     this.textsArr = textsArr;
     this.div = null;
-    this._drawThrottleMs = 120;
-    this._lastDrawTime = 0;
-    this._drawScheduled = false;
+    this.spans = []; // DOM 재사용을 위한 캐싱
     this.setMap(map);
   }
   TextOnlyOverlay.prototype = new google.maps.OverlayView();
   TextOnlyOverlay.prototype.onAdd = function () {
     this.div = document.createElement('div');
     this.div.style.position = 'absolute';
-    this.div.style.pointerEvents = 'auto';
+    // 지도 드래그 이벤트를 막지 않도록 none 처리하고, 자식인 span에만 auto를 부여합니다.
+    this.div.style.pointerEvents = 'none';
     this.div.style.left = '0';
     this.div.style.top = '0';
-    var pane = this.getPanes && this.getPanes();
-    if (pane) (pane.floatPane || pane.overlayLayer).appendChild(this.div);
-  };
-  TextOnlyOverlay.prototype.draw = function () {
-    if (!this.div || !this.getProjection) return;
-    var now = Date.now();
-    if (now - this._lastDrawTime < this._drawThrottleMs) {
-      var self = this;
-      if (!this._drawScheduled) {
-        this._drawScheduled = true;
-        setTimeout(function () {
-          self._drawScheduled = false;
-          self.draw();
-        }, self._drawThrottleMs - (now - self._lastDrawTime));
-      }
-      return;
-    }
-    this._lastDrawTime = now;
-    var proj = this.getProjection();
-    this.div.innerHTML = '';
+    
     var self = this;
     this.textsArr.forEach(function (t) {
       var pos = dxfToLatLng(t.x, t.y);
       if (!pos) return;
-      var point = proj.fromLatLngToDivPixel(new google.maps.LatLng(pos.lat, pos.lng));
       var span = document.createElement('span');
       span.textContent = (t.text || '').trim() || ' ';
       span.style.position = 'absolute';
-      span.style.left = (point.x - 50) + 'px';
-      span.style.top = (point.y - 8) + 'px';
       span.style.width = '100px';
       span.style.fontSize = '12px';
       span.style.fontWeight = 'bold';
       span.style.color = '#FF3B30';
       span.style.textAlign = 'center';
-      span.style.pointerEvents = 'auto';
+      span.style.pointerEvents = 'auto'; // 텍스트만 클릭되도록 허용
       span.style.cursor = 'pointer';
       span.style.textShadow = '0 0 1px #fff, 0 0 2px #fff';
+      // 초기에는 보이지 않도록 숨김 (draw 시점에 좌표 계산 후 위치)
+      span.style.left = '0px';
+      span.style.top = '0px';
+      span.style.transform = 'translate(-9999px, -9999px)';
       span.setAttribute('data-text-id', t.id);
       span.addEventListener('click', function (e) {
         e.stopPropagation();
         if (Date.now() - lastLongPressEndTime < 600) return;
         showTextModal(t.id);
       });
+      // draw에서 좌표 계산시 쓸 WGS84 객체를 미리 생성해 둠
+      span._latLng = new google.maps.LatLng(pos.lat, pos.lng);
       self.div.appendChild(span);
+      self.spans.push(span);
+    });
+
+    var pane = this.getPanes && this.getPanes();
+    if (pane) (pane.floatPane || pane.overlayLayer).appendChild(this.div);
+  };
+  TextOnlyOverlay.prototype.draw = function () {
+    if (!this.div || !this.getProjection) return;
+    var proj = this.getProjection();
+    // Throttle(딜레이)를 제거하고 requestAnimationFrame이나 즉시 실행 수준으로 동작하게 함
+    // 매번 innerHTML을 지우고 만드는 대신, 캐싱된 span 돔의 transform만 변경함 (GPU 가속)
+    this.spans.forEach(function (span) {
+      var point = proj.fromLatLngToDivPixel(span._latLng);
+      if (point) {
+        span.style.transform = 'translate(' + (point.x - 50) + 'px, ' + (point.y - 8) + 'px)';
+      }
     });
   };
   TextOnlyOverlay.prototype.onRemove = function () {
     if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
     this.div = null;
+    this.spans = [];
   };
   textOverlay = new TextOnlyOverlay(texts);
 }
